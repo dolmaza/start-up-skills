@@ -98,18 +98,3 @@ Then edit them — they are yours, and the skills read whatever they say.
 | `grill-me` | Interrogating a vague idea into a precise spec before writing anything |
 | `git-workflow` | Branch-and-PR discipline; main stays merge-only |
 
-## What was deliberately left out
-
-Everything that made the original a pipeline rather than a toolbox:
-
-- **25 agents** and **29 slash commands** — the orchestration layer.
-- **`requirements/`** — the spec-driven source of truth, feature map, and
-  feature graph.
-- **`delegation-approval`, `next-steps`, `requirements-authoring`** skills —
-  only meaningful when agents and commands exist.
-- **`claude-design-sync`, `design-briefing`** skills — bound to the Claude
-  Design boundary agent and the `DesignSync` tool.
-- **The `SessionStart` hook** that nagged you to run `/start-up:init`.
-
-If you later want the full spec-driven factory back, it is unchanged in the
-original repo — the two plugins can be installed side by side.
