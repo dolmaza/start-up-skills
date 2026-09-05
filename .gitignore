@@ -1,0 +1,19 @@
+# Claude Code local state (machine-specific, not shared)
+.claude/settings.local.json
+.claude/*.local.json
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.vs/
+.idea/
+*.swp
+*~
+
+# Scratch / logs
+*.log
+tmp/
+scratch/
