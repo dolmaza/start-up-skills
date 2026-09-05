@@ -1,0 +1,12 @@
+{
+  "name": "start-up-skills",
+  "owner": { "name": "dolmaza" },
+  "description": "Marketplace for the start-up-skills plugin: on-demand engineering skills for .NET Clean Architecture backends and feature-based React frontends.",
+  "plugins": [
+    {
+      "name": "start-up-skills",
+      "source": "./",
+      "description": "On-demand technique skills — .NET 10 Clean Architecture + DDD backends and feature-based React/TypeScript frontends. No agents, no commands, no workflow."
+    }
+  ]
+}
