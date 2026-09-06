@@ -17,7 +17,8 @@ deterministic work into code; the agent only orchestrates.
 public interface ILlmProvider
 {
     Task<Result<string>> CompleteAsync(LlmRequest request, CancellationToken ct);
-    Task<Result<T>> CompleteStructuredAsync<T>(LlmRequest request, CancellationToken ct);
+    Task<Result<T>> CompleteStructuredAsync<T>(LlmRequest request, CancellationToken ct)
+        where T : notnull;
 }
 
 public interface ILlmTool                 // a deterministic, code-backed capability
@@ -50,12 +51,19 @@ Before letting the model produce something, ask: *can code do this?* If yes, bui
 an `ILlmTool` and expose it. The model decides *whether/when* to call it; code does
 the work.
 ```csharp
-public sealed class GetInvoiceTotalsTool : ILlmTool   // code fetches/computes — model does not guess
+// code fetches/computes — the model does not guess
+public sealed class GetInvoiceTotalsTool(IInvoiceReadService invoices) : ILlmTool
 {
     public string Name => "get_invoice_totals";
-    public string JsonSchema => /* { invoiceId: string } */;
+
+    public string JsonSchema => """
+        { "type": "object",
+          "properties": { "invoiceId": { "type": "string" } },
+          "required": ["invoiceId"] }
+        """;
+
     public async Task<Result<string>> InvokeAsync(string argsJson, CancellationToken ct)
-        => /* query read model, return JSON totals */;
+        => /* parse argsJson, query `invoices`, return JSON totals */;
 }
 ```
 
@@ -73,3 +81,4 @@ public sealed class GetInvoiceTotalsTool : ILlmTool   // code fetches/computes �
 - [ ] Every code-expressible step is a tool, not a model guess.
 - [ ] System prompt has concrete objective + explicit boundaries.
 - [ ] Model output validated before use; failure path returns `Result`.
+- [ ] Modern C# baseline applied — see `clean-architecture` skill.

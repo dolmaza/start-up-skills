@@ -16,8 +16,10 @@ skill (§10).
 
 ## Serilog (structured, trace-correlated)
 ```csharp
-builder.Host.UseSerilog((ctx, lc) => lc
-    .ReadFrom.Configuration(ctx.Configuration)
+// Serilog.AspNetCore 8+: register on Services; Host.UseSerilog is the older form.
+builder.Services.AddSerilog((sp, lc) => lc
+    .ReadFrom.Configuration(builder.Configuration)
+    .ReadFrom.Services(sp)
     .Enrich.FromLogContext()
     .Enrich.WithSpan()                 // attach trace/span IDs
     .WriteTo.Console(new RenderedCompactJsonFormatter())
@@ -52,16 +54,22 @@ public sealed class BusinessMetrics
 {
     private readonly Counter<long> _ordersPlaced;
     private readonly Counter<long> _orderFailures;
-    public BusinessMetrics(IMeterFactory f)
+
+    // Explicit ctor, not a primary one: both counters come off the same Meter, and a
+    // field initializer cannot reference another instance field.
+    public BusinessMetrics(IMeterFactory meterFactory)
     {
-        var m = f.Create("Acme.Business");
-        _ordersPlaced  = m.CreateCounter<long>("orders.placed");
-        _orderFailures = m.CreateCounter<long>("orders.failed");
+        var meter = meterFactory.Create("Acme.Business");
+        _ordersPlaced  = meter.CreateCounter<long>("orders.placed");
+        _orderFailures = meter.CreateCounter<long>("orders.failed");
     }
+
     public void OrderPlaced() => _ordersPlaced.Add(1);
-    public void OrderFailed(string reason) => _orderFailures.Add(1, KeyValuePair.Create("reason", (object?)reason));
+    public void OrderFailed(string reason) => _orderFailures.Add(1, new TagList { { "reason", reason } });
 }
 ```
+> Register as a singleton and let `IMeterFactory` own the `Meter` — do **not** dispose
+> it yourself. `TagList` is the allocation-free way to attach dimensions.
 
 ## Dashboards & alerts as code
 - Commit Grafana provisioning (`grafana/provisioning/dashboards/*.json`,
@@ -76,3 +84,4 @@ public sealed class BusinessMetrics
 - [ ] Every error logged with exception + context; no info-log noise.
 - [ ] OTLP exporters point at the Grafana stack; metrics include business signals.
 - [ ] Dashboards + alerts committed to the repo.
+- [ ] Modern C# baseline applied — see `clean-architecture` skill.

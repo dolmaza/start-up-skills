@@ -28,16 +28,20 @@ public sealed class OrderEndpoints : IEndpointGroup
         g.MapPost("/", async (PlaceOrderRequest req, ISender sender, CancellationToken ct) =>
         {
             var result = await sender.Send(new PlaceOrderCommand(req.CustomerId), ct);
-            return result.ToHttpResult(id => Results.Created($"/orders/{id}", id));
+            return result.ToHttpResult(id => TypedResults.Created($"/orders/{id}", id));
         })
-        .WithName("PlaceOrder").Produces<Guid>(201).ProducesProblem(400);
+        .WithName("PlaceOrder")
+        .Produces<Guid>(StatusCodes.Status201Created)
+        .ProducesProblem(StatusCodes.Status400BadRequest);
 
         g.MapGet("/{id:guid}", async (Guid id, ISender sender, CancellationToken ct) =>
         {
             var result = await sender.Send(new GetOrderByIdQuery(id), ct);
-            return result.ToHttpResult(Results.Ok);
+            return result.ToHttpResult(TypedResults.Ok);
         })
-        .WithName("GetOrderById").Produces<OrderDto>(200).ProducesProblem(404);
+        .WithName("GetOrderById")
+        .Produces<OrderDto>(StatusCodes.Status200OK)
+        .ProducesProblem(StatusCodes.Status404NotFound);
     }
 }
 ```
@@ -46,12 +50,17 @@ public sealed class OrderEndpoints : IEndpointGroup
 ```csharp
 public static class ResultHttpExtensions
 {
-    public static IResult ToHttpResult(this Result r) =>
-        r.IsSuccess ? Results.NoContent() : Problem(r.Error);
-    public static IResult ToHttpResult<T>(this Result<T> r, Func<T, IResult> onOk) =>
-        r.IsSuccess ? onOk(r.Value) : Problem(r.Error);
+    extension(Result r)                       // C# 14 extension block
+    {
+        public IResult ToHttpResult() => r.IsSuccess ? TypedResults.NoContent() : Problem(r.Error);
+    }
 
-    private static IResult Problem(Error e) => Results.Problem(
+    extension<T>(Result<T> r)
+    {
+        public IResult ToHttpResult(Func<T, IResult> onOk) => r.IsSuccess ? onOk(r.Value) : Problem(r.Error);
+    }
+
+    private static IResult Problem(Error e) => TypedResults.Problem(
         title: e.Code, detail: e.Message,
         statusCode: e.Type switch
         {
@@ -63,6 +72,10 @@ public static class ResultHttpExtensions
         });
 }
 ```
+> `TypedResults` over `Results`: concrete return types, so endpoints stay unit
+> testable and OpenAPI metadata is inferred. The classic `this Result r` parameter
+> form still compiles — the `extension` block is the C# 14 way to group members and
+> is what lets you add extension *properties* later.
 
 ## Discovery + structural Program.cs
 ```csharp
@@ -81,7 +94,7 @@ public static class EndpointExtensions
 ```csharp
 // Program.cs — structural only
 var builder = WebApplication.CreateBuilder(args);
-builder.Host.UseSerilog(/* ... */);
+builder.Services.AddSerilog(/* ... */);   // Serilog.AspNetCore 8+: on Services, not Host
 builder.Services
     .AddApplication()
     .AddInfrastructure(builder.Configuration)
@@ -99,3 +112,4 @@ app.Run();
 - [ ] `Program.cs` has no inline service config or route logic.
 - [ ] OpenAPI metadata on every endpoint; Swagger UI + JWT bearer wiring per the
       `local-dev-environment` skill (`docs/backend/ARCHITECTURE.md` §10.3).
+- [ ] Modern C# baseline applied — see `clean-architecture` skill.

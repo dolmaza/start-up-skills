@@ -14,7 +14,7 @@ deterministic, isolated, descriptive names. Mock only true externals.
 
 ## Unit — domain & handlers (the bulk)
 ```csharp
-public class PlaceOrderHandlerTests
+public sealed class PlaceOrderHandlerTests
 {
     [Fact]
     public async Task Handle_ValidCommand_PersistsOrderAndReturnsId()
@@ -25,7 +25,7 @@ public class PlaceOrderHandlerTests
         var sut = new PlaceOrderHandler(orders.Object, uow.Object);
 
         // Act
-        var result = await sut.Handle(new PlaceOrderCommand(Guid.NewGuid()), default);
+        var result = await sut.Handle(new PlaceOrderCommand(Guid.NewGuid()), CancellationToken.None);
 
         // Assert
         result.IsSuccess.Should().BeTrue();
@@ -39,7 +39,7 @@ order returns `Result.Failure(DomainErrors.Order.NotEditable)`.
 
 ## Integration — real infra via Testcontainers; WireMock for external HTTP
 ```csharp
-public class OrderRepositoryTests : IClassFixture<PostgresFixture>
+public sealed class OrderRepositoryTests : IClassFixture<PostgresFixture>
 {
     // spin up a real Postgres container, run migrations, exercise the repository,
     // assert round-trip persistence. Use WireMock.Server for any external API/LLM.
@@ -48,7 +48,7 @@ public class OrderRepositoryTests : IClassFixture<PostgresFixture>
 
 ## E2E — critical journeys through the host (fewest)
 ```csharp
-public class PlaceOrderEndpointTests : IClassFixture<ApiFactory> // : WebApplicationFactory<Program>
+public sealed class PlaceOrderEndpointTests : IClassFixture<ApiFactory> // : WebApplicationFactory<Program>
 {
     [Fact]
     public async Task PostOrder_ThenGet_ReturnsCreatedOrder()
@@ -83,6 +83,10 @@ public void Handlers_DoNotDependOnDbContext() { /* assert no AppDbContext depend
 - Share setup via fixtures/`ICollectionFixture` and data builders — no copy-paste.
 - Tests are order-independent and repeatable; no shared mutable state, no real
   clock/network unless containerized.
+- Time is a dependency: production code injects `TimeProvider` (never
+  `DateTime.UtcNow`); tests pass a `FakeTimeProvider`
+  (`Microsoft.Extensions.TimeProvider.Testing`) and advance it explicitly.
+- Pass `CancellationToken.None` rather than `default` so the intent is visible.
 - FluentAssertions for all assertions.
 
 ## Checklist
@@ -90,3 +94,4 @@ public void Handlers_DoNotDependOnDbContext() { /* assert no AppDbContext depend
 - [ ] External deps mocked (Moq/WireMock); real infra via Testcontainers.
 - [ ] Fitness tests encode the constitution's `[GUARD]`s.
 - [ ] `dotnet test` green before "done".
+- [ ] Modern C# baseline applied — see `clean-architecture` skill.

@@ -21,20 +21,29 @@ public sealed record Error(string Code, string Message, ErrorType Type)
 
 public class Result
 {
-    protected Result(bool ok, Error error) { IsSuccess = ok; Error = error; }
+    // Explicit ctors, NOT primary constructors: a primary constructor is always as
+    // accessible as the type, and these must stay protected/internal so `Result`
+    // can only be built through the factories below.
+    protected Result(bool isSuccess, Error error) => (IsSuccess, Error) = (isSuccess, error);
+
     public bool IsSuccess { get; }
     public bool IsFailure => !IsSuccess;
     public Error Error { get; }
+
     public static Result Success() => new(true, Error.None);
     public static Result Failure(Error e) => new(false, e);
     public static Result<T> Success<T>(T value) => new(value, true, Error.None);
     public static Result<T> Failure<T>(Error e) => new(default!, false, e);
 }
+
 public sealed class Result<T> : Result
 {
     private readonly T _value;
-    internal Result(T value, bool ok, Error e) : base(ok, e) => _value = value;
+    internal Result(T value, bool isSuccess, Error error) : base(isSuccess, error) => _value = value;
+
     public T Value => IsSuccess ? _value : throw new InvalidOperationException("No value on failure.");
+
+    public static implicit operator Result<T>(T value) => Success(value);
 }
 ```
 
@@ -42,19 +51,17 @@ public sealed class Result<T> : Result
 ```csharp
 public sealed record PlaceOrderCommand(Guid CustomerId) : IRequest<Result<Guid>>;
 
-public sealed class PlaceOrderHandler : IRequestHandler<PlaceOrderCommand, Result<Guid>>
+// Primary constructor: no fields, no assignments — parameters are in scope in the body.
+public sealed class PlaceOrderHandler(IOrderRepository orders, IUnitOfWork uow)
+    : IRequestHandler<PlaceOrderCommand, Result<Guid>>
 {
-    private readonly IOrderRepository _orders;
-    private readonly IUnitOfWork _uow;
-    public PlaceOrderHandler(IOrderRepository orders, IUnitOfWork uow) { _orders = orders; _uow = uow; }
-
     public async Task<Result<Guid>> Handle(PlaceOrderCommand cmd, CancellationToken ct)
     {
         var created = Order.Create(new CustomerId(cmd.CustomerId));
         if (created.IsFailure) return Result.Failure<Guid>(created.Error);
 
-        _orders.Add(created.Value);
-        await _uow.SaveChangesAsync(ct);
+        orders.Add(created.Value);
+        await uow.SaveChangesAsync(ct);
         return Result.Success(created.Value.Id.Value);
     }
 }
@@ -78,14 +85,13 @@ public sealed class PlaceOrderValidator : AbstractValidator<PlaceOrderCommand>
 public sealed record GetOrderByIdQuery(Guid Id) : IRequest<Result<OrderDto>>;
 public sealed record OrderDto(Guid Id, string Status, decimal Total);
 
-public sealed class GetOrderByIdHandler : IRequestHandler<GetOrderByIdQuery, Result<OrderDto>>
+// `reads` is Dapper-backed; the interface itself is declared here in Application.
+public sealed class GetOrderByIdHandler(IOrderReadService reads)
+    : IRequestHandler<GetOrderByIdQuery, Result<OrderDto>>
 {
-    private readonly IOrderReadService _reads;   // Dapper-backed, defined as interface here
-    public GetOrderByIdHandler(IOrderReadService reads) => _reads = reads;
-
     public async Task<Result<OrderDto>> Handle(GetOrderByIdQuery q, CancellationToken ct)
     {
-        var dto = await _reads.GetByIdAsync(q.Id, ct);
+        var dto = await reads.GetByIdAsync(q.Id, ct);
         return dto is null
             ? Result.Failure<OrderDto>(new Error("Order.NotFound", "Order not found.", ErrorType.NotFound))
             : Result.Success(dto);
@@ -101,3 +107,4 @@ public sealed class GetOrderByIdHandler : IRequestHandler<GetOrderByIdQuery, Res
 - [ ] Writes go through repository + UoW; reads through a Dapper read interface.
 - [ ] Validator exists and is wired into the validation behavior.
 - [ ] No EF Core / Infrastructure reference in the Application project.
+- [ ] Modern C# baseline applied — see `clean-architecture` skill.

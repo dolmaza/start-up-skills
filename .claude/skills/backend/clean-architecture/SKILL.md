@@ -38,6 +38,36 @@ Infrastructure depends inward and *implements* interfaces declared there.
 - Logic in `Program.cs` → extract to an extension method.
 - Domain `.csproj` with a framework package → remove it; redesign.
 
+## Modern C# baseline (C# 14 / .NET 10)
+
+Every project targets `net10.0` with nullable reference types, implicit usings, and
+`LangVersion latest` — set once in `Directory.Build.props` (see `solution-scaffolder`).
+This table is the house style; the other backend skills' examples all follow it.
+
+| Write this | Not this |
+|---|---|
+| File-scoped namespace: `namespace Acme.Domain.Orders;` | block-bodied `namespace X { … }` |
+| Primary constructor: `sealed class Handler(IOrderRepository orders)` | ctor + `private readonly` field + assignment |
+| Collection expression: `= []`, `[a, b, .. rest]` | `new List<T>()`, `new T[]{…}`, `Array.Empty<T>()` |
+| `field` keyword in an accessor | hand-written backing field |
+| Switch expression + patterns | nested `if`/ternary chains |
+| Raw string literal `"""…"""` for SQL/JSON | escaped or concatenated strings |
+| `required` / `init` members | mutable setters plus runtime null checks |
+| `record` / `readonly record struct` | class with hand-written equality |
+| `TimeProvider` injected | `DateTime.UtcNow` |
+| `System.Threading.Lock` | `lock` on a plain `object` |
+| `ArgumentNullException.ThrowIfNull(x)` | `if (x is null) throw new …` |
+| `IReadOnlyCollection<T>` / `params ReadOnlySpan<T>` on public APIs | `params T[]`, bare `IEnumerable<T>` you enumerate twice |
+| `sealed` on every concrete class | open-by-default |
+
+Two limits worth knowing before reaching for a primary constructor:
+- It is **always as accessible as the type**. Factory-only types — `Result`, a
+  validated value object — still need an explicit `private`/`internal`/`protected`
+  ctor.
+- Its parameters are **captured for the object's lifetime**. That is exactly right
+  for injected dependencies; for a value used only during construction, assign it
+  to a member and stop referencing the parameter.
+
 ## Microservices readiness
 Keep modules organized by bounded context so a context can be lifted into its own
 service later: no cross-context entity references; communicate across contexts via

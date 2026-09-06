@@ -18,7 +18,7 @@ is an explicit, justified allow-list. For the full vulnerability checklist see
 ```csharp
 public interface ITokenService
 {
-    AccessToken IssueAccessToken(UserId userId, IEnumerable<string> roles, IEnumerable<string> scopes);
+    AccessToken IssueAccessToken(UserId userId, IReadOnlyCollection<string> roles, IReadOnlyCollection<string> scopes);
     RefreshToken IssueRefreshToken(UserId userId, string deviceId);
     Result<ClaimsPrincipal> Validate(string accessToken);
 }
@@ -69,7 +69,7 @@ Pipeline order matters: `UseCors` → `UseAuthentication` → `UseAuthorization`
 ### Endpoint usage (Minimal API)
 ```csharp
 g.MapPost("/", PlaceOrder).RequireAuthorization("orders:write");   // scope policy
-g.MapGet("/health", () => Results.Ok()).AllowAnonymous();          // explicit opt-out
+g.MapGet("/health", () => TypedResults.Ok()).AllowAnonymous();     // explicit opt-out
 ```
 
 ### Scopes / roles / resource-based
@@ -85,20 +85,31 @@ g.MapGet("/health", () => Results.Ok()).AllowAnonymous();          // explicit o
 // Access token: short-lived (15 min), claims = sub + roles + scopes. Sign RS256.
 // Refresh token: opaque 256-bit random, returned to client, stored HASHED with a
 // familyId. On refresh:
-public async Task<Result<TokenPair>> Refresh(string rawRefresh, CancellationToken ct)
+public sealed class RefreshTokenService(IRefreshTokenStore store, ITokenService tokens)
 {
-    var consumed = await _store.ConsumeAsync(rawRefresh, ct);   // marks old token used
-    if (consumed.IsFailure) return Result.Failure<TokenPair>(AuthErrors.InvalidRefresh);
-    if (consumed.Value.AlreadyUsed)                              // REUSE DETECTED
+    public async Task<Result<TokenPair>> RefreshAsync(string rawRefresh, CancellationToken ct)
     {
-        await _store.RevokeFamilyAsync(consumed.Value.FamilyId, ct);   // nuke the family
-        return Result.Failure<TokenPair>(AuthErrors.RefreshReuseDetected);
+        var consumed = await store.ConsumeAsync(rawRefresh, ct);   // marks old token used
+        if (consumed.IsFailure) return Result.Failure<TokenPair>(AuthErrors.InvalidRefresh);
+        if (consumed.Value.AlreadyUsed)                            // REUSE DETECTED
+        {
+            await store.RevokeFamilyAsync(consumed.Value.FamilyId, ct);   // nuke the family
+            return Result.Failure<TokenPair>(AuthErrors.RefreshReuseDetected);
+        }
+        var access  = tokens.IssueAccessToken(consumed.Value.UserId, roles, scopes);
+        var refresh = tokens.IssueRefreshToken(consumed.Value.UserId, consumed.Value.DeviceId); // same family
+        await store.StoreAsync(refresh, ct);
+        return Result.Success(new TokenPair(access, refresh));
     }
-    var access  = _tokens.IssueAccessToken(consumed.Value.UserId, roles, scopes);
-    var refresh = _tokens.IssueRefreshToken(consumed.Value.UserId, consumed.Value.DeviceId); // same family
-    await _store.StoreAsync(refresh, ct);
-    return Result.Success(new TokenPair(access, refresh));
 }
+```
+
+Generate and store it with the framework primitives — never hand-rolled crypto:
+```csharp
+var raw    = RandomNumberGenerator.GetHexString(64);        // 256 bits of entropy (.NET 9+)
+var hashed = CryptographicOperations.HashData(              // one-shot SHA-256 (.NET 8+)
+                 HashAlgorithmName.SHA256, Encoding.UTF8.GetBytes(raw));
+// Look-ups compare with CryptographicOperations.FixedTimeEquals(a, b) — never `==`.
 ```
 
 ## Auth flows (CQRS commands → thin endpoints, all return `Result`)
@@ -141,3 +152,4 @@ builder.Services.AddCors(o => o.AddPolicy("Default", p => p
 - [ ] CORS named policy with explicit origins; HTTPS + HSTS + security headers.
 - [ ] Rate limiting on auth endpoints; generic auth errors (no enumeration).
 - [ ] `reference/owasp-hardening.md` walked and every item satisfied/justified.
+- [ ] Modern C# baseline applied — see `clean-architecture` skill.

@@ -14,7 +14,7 @@ Constitution (when the project has one): `docs/backend/ARCHITECTURE.md` §1. Dom
 ```csharp
 public sealed class Order : AggregateRoot<OrderId>
 {
-    private readonly List<OrderLine> _lines = new();
+    private readonly List<OrderLine> _lines = [];
     public CustomerId CustomerId { get; private set; }
     public OrderStatus Status { get; private set; }
     public IReadOnlyList<OrderLine> Lines => _lines.AsReadOnly();
@@ -23,7 +23,7 @@ public sealed class Order : AggregateRoot<OrderId>
 
     public static Result<Order> Create(CustomerId customerId)
     {
-        if (customerId is null) return Result.Failure<Order>(DomainErrors.Order.NoCustomer);
+        if (customerId.Value == Guid.Empty) return Result.Failure<Order>(DomainErrors.Order.NoCustomer);
         var order = new Order { Id = OrderId.New(), CustomerId = customerId, Status = OrderStatus.Draft };
         order.Raise(new OrderCreatedDomainEvent(order.Id));
         return Result.Success(order);
@@ -44,23 +44,33 @@ public sealed class Order : AggregateRoot<OrderId>
 public readonly record struct OrderId(Guid Value)
 {
     public static OrderId New() => new(Guid.NewGuid());
+    public override string ToString() => Value.ToString();
 }
 ```
+> A `readonly record struct` is never `null` — guard with `Value == Guid.Empty`,
+> not `is null`.
 
 ## Value object (validate on construction, compare by value)
 ```csharp
 public sealed record Money
 {
-    public decimal Amount { get; }
-    public string Currency { get; }
-    private Money(decimal amount, string currency) { Amount = amount; Currency = currency; }
+    private Money(decimal amount, string currency) => (Amount, Currency) = (amount, currency);
 
-    public static Result<Money> Create(decimal amount, string currency) =>
-        amount < 0          ? Result.Failure<Money>(DomainErrors.Money.Negative)
-      : string.IsNullOrWhiteSpace(currency) ? Result.Failure<Money>(DomainErrors.Money.NoCurrency)
-      : Result.Success(new Money(amount, currency.ToUpperInvariant()));
+    public decimal Amount { get; }
+
+    // C# 14 `field`: auto-property with a normalizing setter, no backing field declared.
+    public string Currency { get; private set => field = value.ToUpperInvariant(); }
+
+    public static Result<Money> Create(decimal amount, string currency) => amount switch
+    {
+        < 0 => Result.Failure<Money>(DomainErrors.Money.Negative),
+        _ when string.IsNullOrWhiteSpace(currency) => Result.Failure<Money>(DomainErrors.Money.NoCurrency),
+        _ => Result.Success(new Money(amount, currency)),
+    };
 }
 ```
+> The private ctor stays explicit: a **primary constructor is always as accessible
+> as the type**, so it cannot express `private`/`internal` construction.
 
 ## Domain event + repository interface
 ```csharp
@@ -92,3 +102,4 @@ public static class DomainErrors
 - [ ] State changes only via methods; setters private.
 - [ ] Factory/behavior returns `Result`; aggregate can't exist invalid.
 - [ ] IDs strongly typed; events raised for cross-context state changes.
+- [ ] Modern C# baseline applied — see `clean-architecture` skill.

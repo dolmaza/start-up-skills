@@ -14,9 +14,9 @@ exposed only via inward interfaces. `DbContext` never leaves this layer.
 
 ## Write side — EF Core
 ```csharp
-public sealed class AppDbContext : DbContext, IUnitOfWork
+public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
+    : DbContext(options), IUnitOfWork
 {
-    public AppDbContext(DbContextOptions<AppDbContext> o) : base(o) { }
     public DbSet<Order> Orders => Set<Order>();
     protected override void OnModelCreating(ModelBuilder b) =>
         b.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
@@ -39,13 +39,12 @@ public sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
     }
 }
 
-public sealed class OrderRepository : IOrderRepository    // implements Domain interface
+public sealed class OrderRepository(AppDbContext db) : IOrderRepository   // implements Domain interface
 {
-    private readonly AppDbContext _db;
-    public OrderRepository(AppDbContext db) => _db = db;
     public Task<Order?> GetByIdAsync(OrderId id, CancellationToken ct) =>
-        _db.Orders.Include(o => o.Lines).FirstOrDefaultAsync(o => o.Id == id, ct);
-    public void Add(Order order) => _db.Orders.Add(order);
+        db.Orders.Include(o => o.Lines).FirstOrDefaultAsync(o => o.Id == id, ct);
+
+    public void Add(Order order) => db.Orders.Add(order);
 }
 ```
 
@@ -54,11 +53,8 @@ public sealed class OrderRepository : IOrderRepository    // implements Domain i
 public interface IOrderReadService           // declared in Application
 { Task<OrderDto?> GetByIdAsync(Guid id, CancellationToken ct); }
 
-public sealed class OrderReadService : IOrderReadService   // implemented here
+public sealed class OrderReadService(IDbConnectionFactory factory) : IOrderReadService   // implemented here
 {
-    private readonly IDbConnectionFactory _factory;
-    public OrderReadService(IDbConnectionFactory f) => _factory = f;
-
     public async Task<OrderDto?> GetByIdAsync(Guid id, CancellationToken ct)
     {
         const string sql = """
@@ -66,13 +62,15 @@ public sealed class OrderReadService : IOrderReadService   // implemented here
             FROM orders o LEFT JOIN order_lines l ON l.order_id = o.id
             WHERE o.id = @id GROUP BY o.id, o.status;
             """;
-        using var conn = await _factory.CreateOpenConnectionAsync(ct);
+        await using var conn = await factory.CreateOpenConnectionAsync(ct);
         return await conn.QuerySingleOrDefaultAsync<OrderDto>(
             new CommandDefinition(sql, new { id }, cancellationToken: ct));
     }
 }
 ```
-> Always parameterize (`@id`). Never concatenate user input into SQL.
+> Always parameterize (`@id`). Never concatenate user input into SQL. The SQL is a
+> raw string literal (`"""…"""`) — no escaping, no concatenation — and the connection
+> is disposed with `await using`, not `using`.
 
 ## Integrations behind interfaces
 - `ICacheStore` → Redis (StackExchange.Redis), cache-aside: try cache → on miss
@@ -99,3 +97,4 @@ public static IServiceCollection AddInfrastructure(this IServiceCollection s, IC
 - [ ] `DbContext` not referenced outside Infrastructure.
 - [ ] SQL parameterized; connections scoped/disposed.
 - [ ] Every integration registered against its interface in `AddInfrastructure`.
+- [ ] Modern C# baseline applied — see `clean-architecture` skill.

@@ -67,6 +67,25 @@ $P.sln
 > project references, not by .sln nesting. Any new project goes directly under
 > `src` or `tests`.
 
+## 2b. Pin the language baseline once (`Directory.Build.props` at the repo root)
+
+```xml
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+  </PropertyGroup>
+</Project>
+```
+> Drop `<TargetFramework>` / `<Nullable>` / `<ImplicitUsings>` from the individual
+> `.csproj` files once this exists — one place to bump, no drift. The house code
+> style it enables is the table in the `clean-architecture` skill.
+
 ## 3. Wire references (dependencies flow INWARD only)
 
 ```bash
