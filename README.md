@@ -1,6 +1,6 @@
 # start-up-skills
 
-**23 skills you invoke yourself, when you decide you want them.** No agents, no
+**24 skills you invoke yourself, when you decide you want them.** No agents, no
 slash commands, no orchestration, no requirements pipeline. You drive the work;
 a skill supplies the patterns, templates, and checklists for the thing you are
 doing right now, and then gets out of the way.
@@ -92,5 +92,6 @@ Then edit them — they are yours, and the skills read whatever they say.
 | Skill | For |
 |---|---|
 | `provider-research` | Researching an external site or API as a data source |
+| `grilling` | Stress-testing a plan by working the design tree one round of questions at a time |
 | `git-workflow` | Branch-and-PR discipline; main stays merge-only |
 
