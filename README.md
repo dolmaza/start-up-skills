@@ -1,8 +1,5 @@
 # start-up-skills
 
-The engineering know-how of the [start-up](https://github.com/dolmaza/start-up)
-factory, with the factory removed.
-
 **23 skills you invoke yourself, when you decide you want them.** No agents, no
 slash commands, no orchestration, no requirements pipeline. You drive the work;
 a skill supplies the patterns, templates, and checklists for the thing you are
