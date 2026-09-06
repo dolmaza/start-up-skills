@@ -3,7 +3,7 @@
 The engineering know-how of the [start-up](https://github.com/dolmaza/start-up)
 factory, with the factory removed.
 
-**24 skills you invoke yourself, when you decide you want them.** No agents, no
+**23 skills you invoke yourself, when you decide you want them.** No agents, no
 slash commands, no orchestration, no requirements pipeline. You drive the work;
 a skill supplies the patterns, templates, and checklists for the thing you are
 doing right now, and then gets out of the way.
@@ -95,6 +95,5 @@ Then edit them — they are yours, and the skills read whatever they say.
 | Skill | For |
 |---|---|
 | `provider-research` | Researching an external site or API as a data source |
-| `grill-me` | Interrogating a vague idea into a precise spec before writing anything |
 | `git-workflow` | Branch-and-PR discipline; main stays merge-only |
 
