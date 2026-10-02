@@ -22,7 +22,8 @@ Inventory before wiring: languages/stacks (`*.sln`, `package.json`), test
 projects and how they run, Dockerfiles + compose files, existing
 `.github/workflows/`, deployment target (`deploy/digitalocean/` scripts, App
 Platform spec, k8s manifests), health endpoints, migration strategy. Report
-gaps (no tests, no HEALTHCHECK, no /health route, secrets in compose) as
+gaps (no tests, no HEALTHCHECK, no ASP.NET Core health-check probe — `/alive`
+liveness, `/health` readiness where dependencies exist — secrets in compose) as
 findings to fix first — the pipeline can't gate on what doesn't exist.
 
 ## 2. Versioning strategy
@@ -98,7 +99,9 @@ jobs:
     concurrency: { group: deploy-production }            # never two deploys at once
     steps: [deploy, health-check, notify]
 ```
-Health check pattern: poll `https://<host>/health` until 200 (bounded retries);
+Health check pattern: poll the readiness probe `https://<host>/health` until 200
+(bounded retries) — or the liveness probe `/alive` when the app has no readiness
+probe yet;
 on failure the job fails loudly and the summary links `rollback.yml` with the
 previous version pre-filled. Upload test reports/coverage as artifacts;
 release notes from the changelog.

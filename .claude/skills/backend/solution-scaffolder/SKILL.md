@@ -149,6 +149,11 @@ the same change as its call site, never ahead of it:
 `Program.cs` ends up as: `builder.Services.AddApplication().AddInfrastructure(cfg)
 .AddPresentation(); ... app.MapEndpoints(); app.Run();`
 
+The one piece of plumbing in the baseline is the **liveness probe**
+(`AddHealthChecks()` + `MapHealthChecks("/alive")`, ASP.NET Core Health Checks —
+template in `containerization-cicd`). Never a hand-written health endpoint; the
+readiness probe (`/health`) comes later, with the first dependency.
+
 The extension methods start **near-empty** and grow one registration at a time as
 dependencies are adopted. Do not pre-register caches, buses, storage clients, or
 options for things nothing uses, and keep `appsettings*.json` free of sections

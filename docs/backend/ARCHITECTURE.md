@@ -229,6 +229,23 @@ Queries skip the domain: endpoint → `Query` → handler → **Dapper** read se
 - Dashboards cover infrastructure (CPU/mem/DB connections) **and** business
   metrics (transaction rates, failure ratios). Alerts wired for critical failures.
 
+### 6.1 Health checks (liveness & readiness probes)
+
+- `[GUARD]` Health is exposed **only** through ASP.NET Core Health Checks
+  (`AddHealthChecks` / `MapHealthChecks` / `IHealthCheck`). No hand-written
+  health endpoint (`MapGet("/health", …)`), no custom health controller.
+- **Liveness — `/alive`** — always present. Runs only checks tagged `live` (a
+  `self` check); it never touches a dependency, so an outage downstream does not
+  get a healthy process restarted.
+- **Readiness — `/health`** — added only when necessary: once the app has a
+  dependency it cannot serve without (§0.1). It runs every registered check; each
+  dependency's check is registered with that dependency and removed with it.
+- Both routes are explicitly anonymous (§9.1) and return the default bare status
+  — no dependency names, versions, or exception details.
+- Container `HEALTHCHECK` and orchestrator liveness probes target `/alive`;
+  readiness probes, load balancers and deploy gates target `/health` when it
+  exists. Templates: `containerization-cicd` skill.
+
 ---
 
 ## 7. Containerization & CI/CD

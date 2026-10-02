@@ -69,8 +69,11 @@ Pipeline order matters: `UseCors` → `UseAuthentication` → `UseAuthorization`
 ### Endpoint usage (Minimal API)
 ```csharp
 g.MapPost("/", PlaceOrder).RequireAuthorization("orders:write");   // scope policy
-g.MapGet("/health", () => TypedResults.Ok()).AllowAnonymous();     // explicit opt-out
+g.MapPost("/login", Login).AllowAnonymous();                       // explicit opt-out
 ```
+Health probes are **not** hand-written endpoints: they are ASP.NET Core Health
+Checks routes (`MapHealthChecks("/alive")`, plus `/health` when readiness exists)
+marked `.AllowAnonymous()` — see `containerization-cicd`.
 
 ### Scopes / roles / resource-based
 - **Scope/permission**: `RequireClaim("scope", "orders:write")` — prefer these

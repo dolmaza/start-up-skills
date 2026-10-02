@@ -1,9 +1,10 @@
 ---
 name: containerization-cicd
 description: >-
-  Templates for multi-stage Dockerfiles and a GitHub Actions pipeline
-  (restore→build→test→image→deploy). Use when containerizing the backend or
-  building CI/CD. Images stay platform-agnostic. The local docker-compose stack
+  Templates for multi-stage Dockerfiles, ASP.NET Core health checks
+  (liveness/readiness probes) and a GitHub Actions pipeline
+  (restore→build→test→image→deploy). Use when containerizing the backend,
+  adding or fixing health checks/probes, or building CI/CD. Images stay platform-agnostic. The local docker-compose stack
   lives in the local-dev-environment skill.
 ---
 
@@ -25,6 +26,8 @@ its own only when the Worker project is added. The file lives next to the
 # `base` MUST be the first stage: Visual Studio's docker-compose debugging builds
 # only this stage in Debug and mounts the compiled output into it.
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
+# The runtime image ships neither curl nor wget; the HEALTHCHECK below needs one.
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 USER $APP_UID
 WORKDIR /app
 EXPOSE 8080
@@ -41,9 +44,69 @@ RUN dotnet publish "src/Api/Acme.Api.csproj" -c Release -o /app/publish --no-res
 FROM base AS final
 WORKDIR /app
 COPY --from=build /app/publish .
-HEALTHCHECK CMD wget -qO- http://localhost:8080/health || exit 1
+HEALTHCHECK CMD curl -fsS http://localhost:8080/alive || exit 1   # liveness probe
 ENTRYPOINT ["dotnet","Acme.Api.dll"]
 ```
+
+## Health checks (liveness + readiness probes — the Microsoft way)
+
+Constitution: `docs/backend/ARCHITECTURE.md` §6.1. Health is exposed through
+**ASP.NET Core Health Checks** (`AddHealthChecks` / `MapHealthChecks` /
+`IHealthCheck`), using the probe convention of Microsoft's .NET service
+defaults. **Never hand-write a health endpoint** (`MapGet("/health", () => Ok())`).
+
+| Probe     | Route     | Answers                                   | Runs                     | Exists          |
+|-----------|-----------|-------------------------------------------|--------------------------|-----------------|
+| Liveness  | `/alive`  | "is the process up?" — restart if not     | checks tagged `live` only | always          |
+| Readiness | `/health` | "can it serve traffic?" — hold traffic if not | every registered check | only once the app has a dependency to check |
+
+**Liveness — the baseline, part of the first scaffold:**
+
+```csharp
+// Api/Extensions — AddPresentation()
+services.AddHealthChecks()
+    .AddCheck("self", () => HealthCheckResult.Healthy(), tags: ["live"]);
+
+// Api/Extensions — MapEndpoints()
+app.MapHealthChecks("/alive", new HealthCheckOptions { Predicate = r => r.Tags.Contains("live") })
+   .AllowAnonymous();
+```
+
+Liveness never touches a dependency: a database outage must not make the
+orchestrator restart a healthy process.
+
+**Readiness — added on demand**, in the same change that adopts the first
+dependency the app cannot serve without (on-demand rule, §0.1). Until then there
+is no `/health` route and no readiness probe.
+
+```csharp
+// Infrastructure/DependencyInjection.cs — one check per dependency in use
+services.AddHealthChecks()
+    .AddDbContextCheck<AppDbContext>();   // Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore
+
+// Api/Extensions — MapEndpoints()
+app.MapHealthChecks("/health").AllowAnonymous();
+```
+
+- Dependency checks: `AddDbContextCheck<T>` for EF Core; for anything else
+  (Redis, RabbitMQ, S3) a small `IHealthCheck` class in Infrastructure that reuses
+  the already-registered client. Each is added with its dependency, removed with it.
+- Only gate readiness on dependencies the app truly cannot serve without; an
+  optional/degradable dependency reports `Degraded`, not `Unhealthy`.
+- Both routes are `.AllowAnonymous()` (they are on the §9.1 allow-list) and keep
+  the default response writer — a bare status string, no dependency names,
+  versions or exception text.
+- The middleware routes are not minimal-API business endpoints: no
+  `IEndpointGroup`, no CQRS, no `Idempotency-Key`.
+
+**Who probes what:**
+
+| Consumer                                         | Probe                                   |
+|--------------------------------------------------|-----------------------------------------|
+| Dockerfile `HEALTHCHECK`, compose `healthcheck`  | `/alive`                                |
+| Kubernetes / App Platform `livenessProbe`        | `/alive`                                |
+| Kubernetes / App Platform `readinessProbe`, load balancer | `/health` (when it exists)     |
+| Deploy gate & post-deploy validation             | `/health` when it exists, else `/alive` |
 
 ## docker-compose (local dev)
 The local stack — app services plus **only the dependencies the project uses**
@@ -90,7 +153,10 @@ jobs:
 
 ## Checklist
 - [ ] Multi-stage build, `base` stage first (VS debugging), non-root,
-      healthcheck, no `:latest`.
+      `HEALTHCHECK` on `/alive`, no `:latest`.
+- [ ] Health via ASP.NET Core Health Checks only — `/alive` (liveness) always;
+      `/health` (readiness) only if there is a dependency to check; no custom
+      health endpoint.
 - [ ] Dockerfiles and image jobs exist only for projects that exist.
 - [ ] Compose `up` from a fresh checkout works (see `local-dev-environment`).
 - [ ] CI runs full test suite; image build + deploy gated on green tests.

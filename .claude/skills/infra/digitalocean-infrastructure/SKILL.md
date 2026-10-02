@@ -127,7 +127,8 @@ closest to the users (e.g. `fra1` for Georgia) — same region for everything.
 ## 7. Post-deploy validation
 
 - [ ] `docker compose ps` — all services healthy/running, restarts stable
-- [ ] Health endpoints 200 from outside (`curl https://api.example.ge/health`)
+- [ ] Health probes 200 from outside (`curl https://api.example.ge/alive`; plus
+      `/health` when the app exposes a readiness probe)
 - [ ] DB reachable from app only — connection test from Droplet; blocked from public
 - [ ] Worker processes a real job; queue depth drains
 - [ ] TLS valid (issuer, expiry, chain) + redirect; DNS resolves to the right IP
