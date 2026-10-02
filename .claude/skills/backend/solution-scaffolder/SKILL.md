@@ -4,7 +4,8 @@ description: >-
   Deterministic bootstrap of a .NET 10 Clean Architecture solution: projects,
   references, package versions, DI skeleton, and the BuildingBlocks shared kernel.
   Use at the START of a new backend, or when adding a structural project. Prefers
-  the dotnet CLI and a fixed layout over hand-written boilerplate.
+  the dotnet CLI and a fixed layout over hand-written boilerplate. Scaffolds only
+  what is needed now — Worker, packages and dependencies are added on demand.
 ---
 
 # Solution Scaffolder
@@ -14,7 +15,23 @@ commands; only fill in domain-specific content afterward.
 
 ## 1. Inputs
 - `PROJECT` — solution/root namespace (e.g. `Acme.Billing`).
-- Whether a **Worker** is needed (background/long-running work → yes).
+
+## 1b. Scaffold only what is needed now (on-demand rule)
+
+The skeleton contains **only what the current requirements use**. Nothing is
+added "because we will probably need it":
+
+- No project without code to put in it (no `Worker` until there is real
+  background work — see §7).
+- No NuGet package without a call site (no Redis/RabbitMQ/S3/Dapper/LLM packages
+  until a feature uses them).
+- No DI registration, options class, config section, compose service, or
+  interface for a dependency that nothing consumes yet.
+- No placeholder files (`Class1.cs`, empty folders, sample `WeatherForecast`
+  code, the template's `UnitTest1.cs`) — delete what `dotnet new` generates.
+
+Everything else in the constitution's stack is a **catalog of approved choices**,
+adopted on demand during development (§7), not a checklist to pre-install.
 
 ## 2. Create the solution (run `scripts/scaffold.sh PROJECT` if present, else)
 
@@ -28,7 +45,6 @@ dotnet new classlib -n "$P.Application"      -o src/Application     -f net10.0
 dotnet new classlib -n "$P.Infrastructure"   -o src/Infrastructure  -f net10.0
 dotnet new classlib -n "$P.BuildingBlocks"   -o src/BuildingBlocks  -f net10.0
 dotnet new web      -n "$P.Api"              -o src/Api             -f net10.0
-dotnet new worker   -n "$P.Worker"           -o src/Worker          -f net10.0   # if needed
 
 # tests
 dotnet new xunit -n "$P.Domain.UnitTests"               -o tests/Domain.UnitTests           -f net10.0
@@ -53,8 +69,7 @@ $P.sln
 │   ├── $P.Application
 │   ├── $P.Infrastructure
 │   ├── $P.BuildingBlocks
-│   ├── $P.Api
-│   └── $P.Worker
+│   └── $P.Api
 └── tests/          <- solution folder
     ├── $P.Domain.UnitTests
     ├── $P.Application.UnitTests
@@ -65,7 +80,8 @@ $P.sln
 > Never create per-layer solution folders (`Domain/`, `Application/`,
 > `Infrastructure/`, `Presentation/`). Layering is expressed by project names and
 > project references, not by .sln nesting. Any new project goes directly under
-> `src` or `tests`.
+> `src` or `tests`. The single exception is `docker-compose` (the `.dcproj` added
+> by the `local-dev-environment` skill), which sits at the solution root.
 
 ## 2b. Pin the language baseline once (`Directory.Build.props` at the repo root)
 
@@ -93,20 +109,32 @@ dotnet add src/Domain        reference src/BuildingBlocks
 dotnet add src/Application   reference src/Domain
 dotnet add src/Infrastructure reference src/Application   # implements inward interfaces
 dotnet add src/Api           reference src/Application src/Infrastructure
-dotnet add src/Worker        reference src/Application src/Infrastructure
 ```
 > Domain must NOT reference Application/Infrastructure/Api. Application must NOT
 > reference Infrastructure/Api. Enforced later by ArchitectureTests.
 
 ## 4. Pin packages (use `dotnet add package`; let CLI resolve latest stable for .NET 10)
+
+Install **only the baseline** at scaffold time:
 - Application: `FluentValidation`, `FluentValidation.DependencyInjectionExtensions`
-- Infrastructure: `Microsoft.EntityFrameworkCore`, provider (`Npgsql.EntityFrameworkCore.PostgreSQL`),
-  `Dapper`, `StackExchange.Redis`, `RabbitMQ.Client`, `AWSSDK.S3`, `Serilog.AspNetCore`,
-  OpenTelemetry packages.
-- Test projects: `FluentAssertions`, `Moq`, `WireMock.Net`, `Testcontainers`,
-  `Microsoft.AspNetCore.Mvc.Testing` (E2E).
+- Api: `Serilog.AspNetCore`
+- Test projects: `FluentAssertions`, `Moq`; `Microsoft.AspNetCore.Mvc.Testing` (E2E).
 - ArchitectureTests: `NetArchTest.Rules`.
 - Centralize versions in `Directory.Packages.props` (Central Package Management).
+
+Everything else is added **when the first feature that uses it is built** — in
+the same change as its call site, never ahead of it:
+
+| Add this…                                                        | …when                                   |
+|------------------------------------------------------------------|-----------------------------------------|
+| `Microsoft.EntityFrameworkCore` + `Npgsql.EntityFrameworkCore.PostgreSQL` | the first aggregate is persisted |
+| `Dapper`                                                         | the first read-side query is written    |
+| `StackExchange.Redis`                                            | caching / idempotency store is wired    |
+| `RabbitMQ.Client`                                                | the first integration event is published|
+| `AWSSDK.S3`                                                      | the first file is stored                |
+| OpenTelemetry packages                                           | observability is wired (`observability-stack`) |
+| `Testcontainers`                                                 | the first integration test hits a real dependency |
+| `WireMock.Net`                                                   | the first external HTTP call is tested  |
 
 ## 5. BuildingBlocks shared kernel (create these first — everything depends on them)
 - `Result` / `Result<T>` and `Error` (Code, Message, ErrorType) — see
@@ -121,7 +149,30 @@ dotnet add src/Worker        reference src/Application src/Infrastructure
 `Program.cs` ends up as: `builder.Services.AddApplication().AddInfrastructure(cfg)
 .AddPresentation(); ... app.MapEndpoints(); app.Run();`
 
-## 7. Verify before handing off
+The extension methods start **near-empty** and grow one registration at a time as
+dependencies are adopted. Do not pre-register caches, buses, storage clients, or
+options for things nothing uses, and keep `appsettings*.json` free of sections
+for them.
+
+## 7. Adding things later (on demand)
+
+When a requirement actually calls for it, add the piece in the same change as
+the code that uses it: package (§4 table) → interface in Application →
+implementation + registration in Infrastructure → compose service and config
+keys (`local-dev-environment` skill) → tests.
+
+**Worker** — only once there is real background/long-running work (a consumer,
+a scheduled job) that should not run in the API process:
+
+```bash
+dotnet new worker -n "$P.Worker" -o src/Worker -f net10.0
+dotnet sln "$P.sln" add src/Worker/$P.Worker.csproj --solution-folder src
+dotnet add src/Worker reference src/Application src/Infrastructure
+```
+Then give it a Dockerfile (`containerization-cicd`) and a `worker` compose
+service (`local-dev-environment`).
+
+## 8. Verify before handing off
 ```bash
 dotnet build
 dotnet sln list                      # every project listed once, none missing
@@ -130,5 +181,7 @@ grep -c 'Project(' "$P.sln"          # sanity: projects + 2 solution folders
 Open the .sln and confirm only `src` and `tests` appear as solution folders. If a
 project landed at the root or in a nested folder, fix it with
 `dotnet sln remove <proj>` then re-add using `--solution-folder src|tests`.
+Confirm the on-demand rule (§1b): no unused project, package, registration,
+config section, or template placeholder file is left in the skeleton.
 Hand the green skeleton back to the architect, then proceed to model the first
 aggregate and build vertical slices.

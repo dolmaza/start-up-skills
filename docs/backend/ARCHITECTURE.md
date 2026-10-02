@@ -30,9 +30,9 @@ fitness rules.
 | Messaging            | RabbitMQ                                                      |
 | Logging              | Serilog                                                      |
 | Telemetry            | OpenTelemetry → Grafana stack                                |
-| Background work      | Separate Worker Service project                              |
+| Background work      | Separate Worker Service project — added when needed (§0.1)   |
 | Containers           | Docker + Docker Compose (local)                              |
-| Local dev            | `docker compose up` runs the **whole system** — frontend + app + all dependencies (§10) |
+| Local dev            | `docker compose up` (or F5 on the `docker-compose` project in Visual Studio) runs the **whole system** — frontend + app + all dependencies in use (§10) |
 | API docs & testing   | OpenAPI + Swagger UI, JWT-enabled, dev-only (§10)            |
 | CI/CD                | GitHub Actions                                               |
 | LLM access           | Provider-agnostic abstraction (Gemini/Claude/OpenAI)         |
@@ -41,6 +41,23 @@ fitness rules.
 | AuthZ                | Roles + scopes/permissions + resource-based policies         |
 | Idempotency          | `Idempotency-Key` on writes, backed by Redis                 |
 | Tests                | xUnit + FluentAssertions + Moq + WireMock                    |
+
+### 0.1 Add on demand — nothing is scaffolded "for later"
+
+The table above is a **catalog of approved choices, not a shopping list**. It
+fixes *which* technology is used when a concern arises; it does not say every
+project has every concern from day one.
+
+- `[GUARD]` A project, NuGet package, DI registration, options/config section,
+  interface, compose service, or Dockerfile exists **only if code in the
+  repository uses it**. No Worker without background work; no Redis, RabbitMQ,
+  S3, Dapper, LLM abstraction or Grafana stack until a feature needs it.
+- A dependency is introduced **in the same change as its first consumer**, with
+  all its pieces together (package, abstraction, implementation, registration,
+  config keys, compose service, tests) — and removed the same way.
+- Wherever this document says the stack "runs X" or a layer "contains X", read
+  it as "when the project uses X". Unused scaffolding, placeholder files and
+  speculative abstractions are review findings.
 
 ---
 
@@ -85,7 +102,7 @@ src/
   Application/       <Project>.Application
   Infrastructure/    <Project>.Infrastructure
   Api/               <Project>.Api          (Minimal API host)
-  Worker/            <Project>.Worker       (background jobs, if needed)
+  Worker/            <Project>.Worker       (background jobs — NOT scaffolded; added when first needed, §0.1)
   BuildingBlocks/    shared kernel: Result, Error, base Entity/AggregateRoot, events
 tests/
   Domain.UnitTests/
@@ -218,9 +235,9 @@ Queries skip the domain: endpoint → `Query` → handler → **Dapper** read se
 
 - Multi-stage Dockerfile per runnable project; platform-agnostic image
   (DigitalOcean App Platform / AWS ECS / Azure Container Apps).
-- `docker-compose.yml` runs API + Worker + Postgres + Redis + RabbitMQ +
-  MinIO (S3) + OTel Collector + Grafana stack for local dev — the full local
-  developer-experience rules live in **§10**.
+- `docker-compose.yml` runs the app services plus the dependencies in use (from:
+  Worker, Postgres, Redis, RabbitMQ, MinIO (S3), OTel Collector, Grafana stack)
+  for local dev — the full local developer-experience rules live in **§10**.
 - GitHub Actions pipeline: **restore → build → test → publish image → deploy**.
 
 ---
@@ -328,11 +345,20 @@ manually testing endpoints require **zero setup beyond Docker**. Use the
 
 ### 10.1 One-command stack
 - `[GUARD]` `docker compose up` from a fresh checkout brings up the **whole
-  system**: the frontend (when the repo has one), API, Worker, Postgres, Redis,
-  RabbitMQ, MinIO (S3), OTel Collector, and the Grafana stack
-  (Tempo/Prometheus/Loki/Grafana) — with pinned images, healthchecks, and correct
-  `depends_on` ordering. Compose is the single source of truth for local
-  dependencies; no "install X locally first" steps.
+  system**: the API, the frontend (when the repo has one), and every dependency
+  the code actually uses — drawn from Worker, Postgres, Redis, RabbitMQ, MinIO
+  (S3), OTel Collector, and the Grafana stack (Tempo/Prometheus/Loki/Grafana) —
+  with pinned images, healthchecks, and correct `depends_on` ordering. Compose is
+  the single source of truth for local dependencies; no "install X locally
+  first" steps.
+- `[GUARD]` **No unused services.** A service is added to compose in the same
+  change as the code that first uses it (§0.1); the file never carries
+  containers "for later".
+- `[GUARD]` **Selectable as the Visual Studio startup project.** A
+  `docker-compose.dcproj` sits next to `docker-compose.yml` and is part of the
+  solution; each containerized .NET project points at it
+  (`DockerComposeProjectPath`) and its Dockerfile starts with the runtime `base`
+  stage, so F5 on `docker-compose` brings the stack up with the debugger attached.
 - `[GUARD]` **The frontend is part of the stack, not an afterthought.** If a
   frontend exists when compose is authored, it ships as a service in the same
   file; if one is added later, the frontend scaffolding adds its service to the
@@ -343,8 +369,9 @@ manually testing endpoints require **zero setup beyond Docker**. Use the
 - Named volumes persist data; `docker compose down -v` is the documented reset.
 
 ### 10.2 Debug loop (logs & telemetry included)
-- **Deps-only mode** (`docker compose up -d --scale api=0 --scale worker=0
-  --scale frontend=0`) runs just the backing services so API/Worker run from the
+- **Deps-only mode** (`docker compose up -d --scale api=0 --scale frontend=0`,
+  plus `--scale worker=0` once a Worker exists) runs just the backing services so
+  the app runs from the
   IDE with breakpoints and hot reload against the same containers, and the
   frontend runs from `npm run dev` on the host.
   `appsettings.Development.json` targets the localhost ports; compose env vars

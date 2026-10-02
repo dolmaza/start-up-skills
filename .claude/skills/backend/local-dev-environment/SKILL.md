@@ -2,10 +2,13 @@
 name: local-dev-environment
 description: >-
   The one-command local development environment: a docker-compose stack running
-  the app plus every dependency (Postgres, Redis, RabbitMQ, MinIO, OTel Collector,
-  Tempo/Prometheus/Loki/Grafana), an IDE debug loop against the same containers,
+  the app plus every dependency the project actually uses (added on demand from
+  a catalog: Postgres, Redis, RabbitMQ, MinIO, OTel Collector,
+  Tempo/Prometheus/Loki/Grafana), selectable as the Visual Studio startup
+  project (docker-compose.dcproj), an IDE debug loop against the same containers,
   and Swagger UI wired with JWT bearer auth + seeded dev users so endpoints are
-  testable in the browser. Use when setting up or fixing local dev / Swagger.
+  testable in the browser. Use when setting up or fixing local dev / Swagger, or
+  when adding a new dependency to the stack.
 ---
 
 # Local Development Environment
@@ -17,9 +20,32 @@ conveniences are gated on `Environment.IsDevelopment()` — production is unaffe
 ## The two commands every developer uses
 
 ```bash
-docker compose up -d --build                       # whole system: frontend + API + Worker + all dependencies
-docker compose up -d --scale api=0 --scale worker=0 --scale frontend=0   # deps only: run app/UI from the IDE
+docker compose up -d --build                       # whole system: every app service + every dependency in use
+docker compose up -d --scale api=0 --scale frontend=0   # deps only: run app/UI from the IDE
 ```
+
+(Scale to zero every *app* service the file has — add `--scale worker=0` once a
+Worker exists.) Visual Studio users get the first command as **F5**: see
+"Visual Studio startup project" below.
+
+## Only what the project uses (on-demand rule)
+
+The compose file contains **only services something in the code actually talks
+to**. A fresh backend starts with `api` alone (plus `postgres` once the first
+aggregate is persisted). Never add a `worker`, Redis, RabbitMQ, MinIO or the
+Grafana stack "for later" — an unused container is noise in `up`, in the README
+and in every developer's RAM.
+
+When a dependency is adopted during development, add all of its pieces **in the
+same change** as the code that uses it, and nothing more:
+
+1. its service block from the catalog below (pinned image, healthcheck, port,
+   volume);
+2. its key in `x-app-env` and its entry in the app's `depends_on`;
+3. its localhost counterpart in `appsettings.Development.json`;
+4. its row in the README URL table.
+
+Removing a dependency removes the same four things.
 
 In deps-only mode the app runs under the debugger (F5 / `dotnet watch`) and the
 frontend from `npm run dev`, both against the same containers — every dependency
@@ -33,7 +59,35 @@ Include the `frontend` service below whenever the repo has a frontend — and wh
 frontend is added *later*, it adds its own service to this same file. One compose
 file per repo.
 
-## docker-compose.yml (app + every dependency, pinned images, healthchecks)
+## docker-compose.yml — starting point
+
+```yaml
+services:
+  api:
+    build: { context: ., dockerfile: src/Api/Dockerfile }
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+    ports: ["8080:8080"]
+```
+
+That is the whole file for a backend with no dependencies yet. It grows from the
+catalog as features need things.
+
+## Service catalog (copy a block only when the code uses it)
+
+| Service(s)                                   | Add when                                         |
+|----------------------------------------------|--------------------------------------------------|
+| `postgres`                                   | the first aggregate is persisted                 |
+| `redis`                                      | caching or the idempotency store is implemented  |
+| `rabbitmq`                                   | the first integration event is published/consumed|
+| `minio`                                      | the first file is stored                         |
+| `otel-collector` + `tempo`/`loki`/`prometheus`/`grafana` | observability is wired (`observability-stack` skill) — as one unit |
+| `worker`                                     | the Worker project exists (`solution-scaffolder` §7) |
+| `frontend`                                   | the repo has a frontend                          |
+
+The file below is the shape **once everything has been adopted** — a reference to
+copy blocks from, not a template to paste whole. Hoist `x-app-env` / `&app-deps`
+into anchors once a second app service (worker) needs to share them.
 
 ```yaml
 x-app-env: &app-env
@@ -119,6 +173,69 @@ volumes: { pgdata: {}, minio: {} }
 ```
 
 Named volumes persist data across restarts; `docker compose down -v` is the reset.
+
+## Visual Studio startup project (`docker-compose.dcproj`)
+
+A bare `docker-compose.yml` is invisible to Visual Studio. To make the stack
+selectable as the **startup project** (F5 = compose up + debugger attached to the
+.NET services), always create these alongside the compose file:
+
+**1. `docker-compose.dcproj`** at the repo root, next to `docker-compose.yml`:
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" Sdk="Microsoft.Docker.Sdk">
+  <PropertyGroup Label="Globals">
+    <ProjectVersion>2.1</ProjectVersion>
+    <DockerTargetOS>Linux</DockerTargetOS>
+    <ProjectGuid>NEW-GUID-HERE</ProjectGuid>   <!-- generate: uuidgen / [guid]::NewGuid() -->
+    <DockerLaunchAction>LaunchBrowser</DockerLaunchAction>
+    <DockerServiceName>api</DockerServiceName>
+    <DockerServiceUrl>{Scheme}://localhost:{ServicePort}/swagger</DockerServiceUrl>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="docker-compose.yml" />
+    <None Include=".dockerignore" />
+  </ItemGroup>
+</Project>
+```
+
+**2. Add it to the solution** — at the solution root, not under `src`/`tests`:
+
+```bash
+dotnet sln "$P.sln" add docker-compose.dcproj --in-root
+```
+
+**3. Link each containerized .NET project to it** (`src/Api/*.csproj`, and
+`src/Worker/*.csproj` once it exists):
+
+```xml
+<PropertyGroup>
+  <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+  <DockerComposeProjectPath>..\..\docker-compose.dcproj</DockerComposeProjectPath>
+</PropertyGroup>
+```
+
+**4. A `.dockerignore` at the repo root** (`**/bin`, `**/obj`, `.git`, `.vs`,
+`**/node_modules`) — the build context is the repo root.
+
+What VS needs from the rest of the setup:
+- Each .NET service uses `build: { context: ., dockerfile: src/<Project>/Dockerfile }`
+  — VS matches a service to its project by the Dockerfile sitting next to the
+  `.csproj`; that is how it knows which containers to attach the debugger to.
+- The Dockerfile's **first stage is the runtime `base` stage** (see
+  `containerization-cicd`): in Debug, VS builds only that stage and
+  volume-mounts the compiled output for fast F5.
+- Keep the service named `api` and the Dockerfile `EXPOSE 8080` so
+  `DockerServiceName` / `{ServicePort}` resolve and the browser opens Swagger.
+
+VS runs the stack under its own compose project name, so it does not share
+containers with a CLI `docker compose up` — stop one before starting the other
+or the published ports collide. Running the API alone (the `Api` launch profile)
+against deps-only containers keeps working as before.
+
+## Observability configs (only when the Grafana stack is adopted)
+
 Commit the small configs under `deploy/` (collector, tempo, prometheus, Grafana
 provisioning). The collector fans OTLP out to the stack:
 
@@ -195,7 +312,7 @@ Four things that break this if you skip them:
 Scale it to zero (`--scale frontend=0`) to run the UI from the host instead —
 `npm run dev` against the same API container, same as the deps-only backend loop.
 
-## Where to look (document this table in the project README)
+## Where to look (document this table in the project README — rows for services in use only)
 
 | What                                   | URL / port                                |
 |----------------------------------------|-------------------------------------------|
@@ -274,12 +391,18 @@ if (app.Environment.IsDevelopment())
       "install X first" steps beyond Docker.
 - [ ] **The whole system is up, not half of it**: if the repo has a frontend, it is
       a service in this file, reachable in a browser, and talking to the API.
-- [ ] Deps-only mode (`--scale api=0 --scale worker=0 --scale frontend=0`) + F5 and
+- [ ] **Nothing unused**: every compose service, env key, `depends_on` entry and
+      volume has code that uses it; no `worker` service without a Worker project.
+- [ ] **Visual Studio**: `docker-compose.dcproj` exists at the repo root, is in the
+      solution, and can be set as startup project; F5 brings the stack up, attaches
+      the debugger to the API and opens Swagger.
+- [ ] Deps-only mode (every app service scaled to 0) + F5 and
       `npm run dev` work; localhost ports in `appsettings.Development.json`, service
       names in compose env.
 - [ ] Swagger UI reachable in dev only; Authorize accepts a JWT; login → token →
       secured call works end to end; writes show an `Idempotency-Key` input.
 - [ ] Dev users seeded only in Development; credentials documented in README.
-- [ ] Logs via `compose logs` **and** Grafana→Loki; traces in Tempo; metrics in
-      Prometheus; the URL table is in the project README.
+- [ ] Logs via `compose logs`; once the Grafana stack is adopted, also
+      Grafana→Loki, traces in Tempo, metrics in Prometheus. The URL table (services
+      in use) is in the project README.
 - [ ] Images pinned (no `:latest`); named volumes; `down -v` resets cleanly.

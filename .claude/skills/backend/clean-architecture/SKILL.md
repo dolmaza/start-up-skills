@@ -74,7 +74,8 @@ service later: no cross-context entity references; communicate across contexts v
 integration events (RabbitMQ), never shared tables.
 
 ## Naming & file organization
-`<Project>.Domain | .Application | .Infrastructure | .Api | .Worker | .BuildingBlocks`.
+`<Project>.Domain | .Application | .Infrastructure | .Api | .BuildingBlocks`
+(+ `.Worker` only once background work exists — never scaffolded up front).
 
 Inside each project, group **by feature/aggregate first, then by role** (full
 reference layout in `docs/backend/ARCHITECTURE.md` §1):
