@@ -6,7 +6,8 @@ description: >-
   and live cost estimation, idempotent doctl provisioning order (project, VPC,
   Droplets, managed DBs, Spaces, firewalls, DNS, TLS), deployment via registry +
   compose or App Platform, the post-deploy validation checklist, and the
-  deliverables under deploy/digitalocean/. Use when deploying to or estimating
+  deliverables under deploy/digitalocean/ (scripts) and docs/infra/digitalocean/
+  (documents). Use when deploying to or estimating
   costs on DigitalOcean.
 ---
 
@@ -113,7 +114,8 @@ closest to the users (e.g. `fra1` for Georgia) — same region for everything.
 
 ## 6. Deployment
 
-1. **Images**: build from the repo's Dockerfiles, push to DO registry
+1. **Images**: build from the repo's Dockerfiles (each with its project folder
+   as context — `backend/<name>-api`, `frontend/<name>-ui`, ...), push to DO registry
    (`doctl registry login`, tag `registry.digitalocean.com/<reg>/<svc>:<sha>`).
 2. **Compose for prod**: a `deploy/digitalocean/docker-compose.prod.yml` —
    registry images, no build contexts, env from `/etc/acme/.env` on the
@@ -136,14 +138,18 @@ closest to the users (e.g. `fra1` for Georgia) — same region for everything.
 - [ ] Monitoring shows the host + alerts route; backups enabled and scheduled
 - [ ] Logs flowing (`docker compose logs`, DO monitoring)
 
-## 8. Deliverables (`deploy/digitalocean/`)
+## 8. Deliverables
+
+Executable artifacts under `deploy/digitalocean/`, documents under `docs/` (all
+documentation lives there):
 
 ```text
 deploy/digitalocean/
-├── ASSESSMENT.md         # component inventory, recommendation + trade-offs, cost tables per env
 ├── provision-<env>.sh    # idempotent doctl sequence
 ├── docker-compose.prod.yml  (or app.yaml)
-├── .env.example          # every required secret/var, placeholder values only
+└── .env.example          # every required secret/var, placeholder values only
+docs/infra/digitalocean/
+├── ASSESSMENT.md         # component inventory, recommendation + trade-offs, cost tables per env
 ├── DEPLOY.md             # step-by-step deploy + rollback
 └── RUNBOOK.md            # operations: logs, restart, scale up a size, restore a backup, rotate secrets, teardown
 ```

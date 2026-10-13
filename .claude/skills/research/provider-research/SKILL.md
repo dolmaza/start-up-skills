@@ -4,13 +4,13 @@ description: >-
   Method + report template for researching an external website or API as a data
   source: API-first discovery, rendering/network analysis, request verification
   with real captures, schema mapping, constraint probing, and the
-  implementation-ready REPORT.md structure written under research/. Use whenever
+  implementation-ready REPORT.md structure written under docs/research/. Use whenever
   researching a website, API, or data provider for integration.
 ---
 
 # Provider Research
 
-Produces the research artifacts under `research/` that let a backend
+Produces the research artifacts under `docs/research/` that let a backend
 implementation agent build a provider integration without re-investigating the
 target. Applies equally to products, services, doctors, clinics, laboratories,
 appointments — any entity a site exposes.
@@ -18,7 +18,7 @@ appointments — any entity a site exposes.
 ## Where output goes
 
 ```text
-research/
+docs/research/
 └── <target-slug>/            # kebab-case site/provider name, e.g. psp-ge
     ├── REPORT.md             # the deliverable — template below
     ├── samples/              # real captured payloads (trimmed, redacted)

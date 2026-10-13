@@ -25,7 +25,7 @@ docker compose up -d --scale api=0 --scale frontend=0   # deps only: run app/UI 
 ```
 
 (Scale to zero every *app* service the file has — add `--scale worker=0` once a
-Worker exists.) Visual Studio users get the first command as **F5**: see
+Worker exists, and one `--scale` per extra backend service or UI.) Visual Studio users get the first command as **F5**: see
 "Visual Studio startup project" below.
 
 ## Only what the project uses (on-demand rule)
@@ -59,12 +59,34 @@ Include the `frontend` service below whenever the repo has a frontend — and wh
 frontend is added *later*, it adds its own service to this same file. One compose
 file per repo.
 
+## Where things live (repo folder structure)
+
+The compose file sits at the **repo root** and reaches into the fixed layout
+owned by the scaffolder skills (`<name>` = the kebab-case project name; the
+examples below use `acme`):
+
+```text
+<repo>/
+├── backend/<name>-api/          # build context of `api` (and `worker`)
+├── backend/<name>-<service>/    # build context of a separate service, if one exists
+├── frontend/<name>-ui/          # build context of `frontend`
+├── frontend/<name>-<ui>-ui/     # build context of a separate UI, if one exists
+├── docs/
+├── deploy/                      # observability configs, only once adopted
+├── docker-compose.yml           # the ONE compose file
+└── docker-compose.dcproj
+```
+
+Each project folder is its own **build context** — never the repo root — so a
+Dockerfile's `COPY` paths stay relative to its own project and one service's
+image never ships another's source.
+
 ## docker-compose.yml — starting point
 
 ```yaml
 services:
   api:
-    build: { context: ., dockerfile: src/Api/Dockerfile }
+    build: { context: ./backend/acme-api, dockerfile: src/Api/Dockerfile }
     environment:
       ASPNETCORE_ENVIRONMENT: Development
     ports: ["8080:8080"]
@@ -83,7 +105,9 @@ catalog as features need things.
 | `minio`                                      | the first file is stored                         |
 | `otel-collector` + `tempo`/`loki`/`prometheus`/`grafana` | observability is wired (`observability-stack` skill) — as one unit |
 | `worker`                                     | the Worker project exists (`solution-scaffolder` §7) |
-| `frontend`                                   | the repo has a frontend                          |
+| `frontend`                                   | the repo has a frontend (`frontend/<name>-ui`)   |
+| `<ui>-ui` (any extra UI, e.g. `admin-ui`)    | a separate UI exists (`frontend/<name>-<ui>-ui`) — next free port, 5174 |
+| `<service>` (any extra backend service)      | a separate service exists (`backend/<name>-<service>`) — next free port, 8081 |
 
 The file below is the shape **once everything has been adopted** — a reference to
 copy blocks from, not a template to paste whole. Hoist `x-app-env` / `&app-deps`
@@ -100,7 +124,7 @@ x-app-env: &app-env
 
 services:
   api:
-    build: { context: ., dockerfile: src/Api/Dockerfile }
+    build: { context: ./backend/acme-api, dockerfile: src/Api/Dockerfile }
     environment: *app-env
     ports: ["8080:8080"]
     depends_on: &app-deps
@@ -110,18 +134,18 @@ services:
       minio: { condition: service_healthy }
       otel-collector: { condition: service_started }
   worker:
-    build: { context: ., dockerfile: src/Worker/Dockerfile }
+    build: { context: ./backend/acme-api, dockerfile: src/Worker/Dockerfile }
     environment: *app-env
     depends_on: *app-deps
 
   frontend:                                  # omit ONLY while the repo has no frontend
-    build: { context: ./frontend, target: dev }   # ./frontend = wherever package.json lives
+    build: { context: ./frontend/acme-ui, target: dev }   # frontend/<name>-ui
     environment:
       # Browser-reachable URL — the fetch runs on the HOST, not in the network.
       VITE_API_URL: http://localhost:8080
     ports: ["5173:5173"]                     # NOT 3000 — Grafana owns that
     volumes:
-      - ./frontend:/app                      # bind mount → HMR on host edits
+      - ./frontend/acme-ui:/app              # bind mount → HMR on host edits
       - /app/node_modules                    # keep the container's node_modules
     depends_on: { api: { condition: service_started } }
 
@@ -195,32 +219,39 @@ selectable as the **startup project** (F5 = compose up + debugger attached to th
   </PropertyGroup>
   <ItemGroup>
     <None Include="docker-compose.yml" />
-    <None Include=".dockerignore" />
   </ItemGroup>
 </Project>
 ```
 
-**2. Add it to the solution** — at the solution root, not under `src`/`tests`:
+**2. Add it to the solution** — at the solution root, not under `src`/`tests`.
+The solution lives in `backend/<name>-api/`, the `.dcproj` at the repo root (run
+this from the repo root):
 
 ```bash
-dotnet sln "$P.sln" add docker-compose.dcproj --in-root
+dotnet sln "backend/$NAME-api/$P.sln" add docker-compose.dcproj --in-root
 ```
+A separate backend service (`backend/<name>-<service>/`) adds the same `.dcproj`
+to its own solution the same way.
 
 **3. Link each containerized .NET project to it** (`src/Api/*.csproj`, and
-`src/Worker/*.csproj` once it exists):
+`src/Worker/*.csproj` once it exists) — four levels up from
+`backend/<name>-api/src/Api/`:
 
 ```xml
 <PropertyGroup>
   <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
-  <DockerComposeProjectPath>..\..\docker-compose.dcproj</DockerComposeProjectPath>
+  <DockerComposeProjectPath>..\..\..\..\docker-compose.dcproj</DockerComposeProjectPath>
 </PropertyGroup>
 ```
 
-**4. A `.dockerignore` at the repo root** (`**/bin`, `**/obj`, `.git`, `.vs`,
-`**/node_modules`) — the build context is the repo root.
+**4. A `.dockerignore` in each build context** — `backend/<name>-api/.dockerignore`
+(`**/bin`, `**/obj`, `.vs`) and `frontend/<name>-ui/.dockerignore`
+(`node_modules`, `dist`). Docker reads it from the context root, and the context
+is the project folder, not the repo root.
 
 What VS needs from the rest of the setup:
-- Each .NET service uses `build: { context: ., dockerfile: src/<Project>/Dockerfile }`
+- Each .NET service uses
+  `build: { context: ./backend/<name>-api, dockerfile: src/<Project>/Dockerfile }`
   — VS matches a service to its project by the Dockerfile sitting next to the
   `.csproj`; that is how it knows which containers to attach the debugger to.
 - The Dockerfile's **first stage is the runtime `base` stage** (see
@@ -264,7 +295,9 @@ datasources:
 
 ## The frontend service (whenever the repo has a frontend)
 
-`frontend/Dockerfile` — a `dev` target for compose, a default target for deploys:
+`frontend/<name>-ui/Dockerfile` — a `dev` target for compose, a default target for
+deploys. Its build context is `frontend/<name>-ui/`, so `deploy/nginx.conf` below is
+`frontend/<name>-ui/deploy/nginx.conf`:
 
 ```dockerfile
 FROM node:22-alpine AS deps
@@ -310,7 +343,15 @@ Four things that break this if you skip them:
    Development CORS policy, or every call fails in the browser while `curl` works.
 
 Scale it to zero (`--scale frontend=0`) to run the UI from the host instead —
-`npm run dev` against the same API container, same as the deps-only backend loop.
+`npm run dev` in `frontend/<name>-ui/` against the same API container, same as
+the deps-only backend loop.
+
+**A separate UI** (`frontend/<name>-<ui>-ui`, where `<ui>` is whatever name the
+user asked for; only when one was requested) is a second copy of this block,
+with the service named `<ui>-ui`. For an admin UI: service `admin-ui`, context
+`./frontend/acme-admin-ui`, port **5174** (also in its `vite.config.ts`), its own
+Dockerfile, and its origin added to the API's Development CORS policy. Same
+compose file — never one per UI.
 
 ## Where to look (document this table in the project README — rows for services in use only)
 
@@ -393,6 +434,8 @@ if (app.Environment.IsDevelopment())
       a service in this file, reachable in a browser, and talking to the API.
 - [ ] **Nothing unused**: every compose service, env key, `depends_on` entry and
       volume has code that uses it; no `worker` service without a Worker project.
+- [ ] **Layout**: one `docker-compose.yml` at the repo root; every build context is
+      a project folder (`./backend/<name>-api`, `./frontend/<name>-ui`, ...), never `.`.
 - [ ] **Visual Studio**: `docker-compose.dcproj` exists at the repo root, is in the
       solution, and can be set as startup project; F5 brings the stack up, attaches
       the debugger to the API and opens Swagger.

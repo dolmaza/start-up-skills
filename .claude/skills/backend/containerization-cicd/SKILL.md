@@ -18,9 +18,12 @@ approvals, security scanning, rollback) is the `release-pipeline` skill via
 `cicd-engineer` — when that exists, it replaces the basic pipeline here.
 
 ## Multi-stage Dockerfile (per runnable project)
-One per project that **exists** — `src/Api/Dockerfile` to start; a Worker gets
-its own only when the Worker project is added. The file lives next to the
-`.csproj`; the build context is the repo root.
+One per project that **exists** — `backend/<name>-api/src/Api/Dockerfile` to
+start; a Worker gets its own only when the Worker project is added. The file
+lives next to the `.csproj`; the **build context is the backend project folder**
+(`backend/<name>-api/`, where the `.sln` and `Directory.*.props` are) — not the
+repo root — so every path in the Dockerfile is relative to that folder. A
+separate service (`backend/<name>-<service>/`) has its own Dockerfile and context.
 
 ```dockerfile
 # `base` MUST be the first stage: Visual Studio's docker-compose debugging builds
@@ -127,6 +130,7 @@ on: { push: { branches: [main] }, pull_request: {} }
 jobs:
   build-test:
     runs-on: ubuntu-latest
+    defaults: { run: { working-directory: backend/acme-api } }   # the solution folder
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -142,7 +146,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
       - uses: docker/build-push-action@v6
-        with: { context: ., file: src/Api/Dockerfile, push: true, cache-from: type=gha, cache-to: type=gha,mode=max, tags: "${{ vars.REGISTRY }}/acme-api:${{ github.sha }}" }
+        with: { context: backend/acme-api, file: backend/acme-api/src/Api/Dockerfile, push: true, cache-from: type=gha, cache-to: type=gha,mode=max, tags: "${{ vars.REGISTRY }}/acme-api:${{ github.sha }}" }
   deploy:
     needs: image
     if: github.ref == 'refs/heads/main'
@@ -158,6 +162,7 @@ jobs:
       `/health` (readiness) only if there is a dependency to check; no custom
       health endpoint.
 - [ ] Dockerfiles and image jobs exist only for projects that exist.
+- [ ] Build context is the project folder (`backend/<name>-api`), in compose and CI alike.
 - [ ] Compose `up` from a fresh checkout works (see `local-dev-environment`).
 - [ ] CI runs full test suite; image build + deploy gated on green tests.
 - [ ] All configuration injected via env/secrets — image is host-agnostic.

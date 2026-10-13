@@ -40,6 +40,25 @@ modularity, and strict dependency boundaries.
 
 ## 1. Feature-based architecture (vertical slices)
 
+### Where the app lives
+```text
+<repo>/
+├── backend/<name>-api/        # see docs/backend/ARCHITECTURE.md §1
+├── frontend/
+│   ├── <name>-ui/             # the main UI — the app described below
+│   └── <name>-<ui>-ui/        # a separate UI — only when requested
+└── docs/                      # all documentation and related files
+```
+- `[GUARD]` Every UI is its own folder under `frontend/`: the main one is
+  `<name>-ui`, any other is `<name>-<ui>-ui` (`<name>` is the kebab-case project
+  name; `<ui>` is the name requested for that UI — `admin`, `partner-portal`,
+  anything). No app code at the
+  repo root or directly in `frontend/`.
+- A separate UI (admin, back-office, portal) is created **only on request**. It
+  is a complete app with this same internal structure, its own `package.json`,
+  Dockerfile and compose service; apps never import from each other.
+
+### Inside an app (`frontend/<name>-ui/`)
 ```text
 src/
 ├── app/            # entry, global providers, router setup, app shell
@@ -254,7 +273,8 @@ skill; this section is the frontend's obligation to it.
   (`http://localhost:8080`), never a compose service name — the request is issued
   by the user's browser on the host, which cannot resolve `api`. The API must allow
   the dev origin (`http://localhost:5173`) in its Development CORS policy.
-- Published port is **5173**, not 3000 — Grafana owns 3000 in this stack.
+- Published port is **5173**, not 3000 — Grafana owns 3000 in this stack. A
+  separate UI takes the next free port (5174, ...) as its own compose service.
 - `--scale frontend=0` drops the container so the UI can run from the host
   (`npm run dev`) against the same API, mirroring the backend's deps-only loop.
 - **Done means** `http://localhost:5173` renders *and* its API calls succeed in the

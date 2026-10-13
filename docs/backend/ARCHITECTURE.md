@@ -95,7 +95,35 @@ Presentation  ─────►  Application  ─────►  Domain
 - `[GUARD]` Endpoints contain **zero** business/orchestration logic — they
   translate HTTP ↔ CQRS message ↔ `Result` ↔ HTTP status only.
 
-### Reference solution layout
+### Repository layout
+```
+<repo>/
+  backend/
+    <name>-api/          the API solution (layout below) — always present
+    <name>-<service>/    a separate service / microservice — only when requested
+  frontend/
+    <name>-ui/           the main UI
+    <name>-<ui>-ui/      a separate UI, named as requested (e.g. admin) — only when requested
+  docs/                  ALL documentation and related files (these constitutions,
+                         ADRs, specs, research, runbooks)
+  docker-compose.yml     one per repo (§10)
+```
+- `[GUARD]` The repo root holds the folders `backend`, `frontend`, `docs` — no
+  solution, `src/`, `tests/` or app code at the root. `<name>` is the project
+  name in kebab-case.
+- `[GUARD]` Each backend project is its own folder `backend/<name>-<service>`
+  (`<service>` = the name requested for it) and is
+  self-contained: own `.sln`, `src/`, `tests/`, `Directory.*.props`, Dockerfile
+  and Docker build context. The API is `backend/<name>-api`.
+- A separate service is added **only on request** (§0.1), as a sibling folder
+  with its own solution — never as projects inside the API's solution, and with
+  no project references across folders (services talk over HTTP/messaging). A
+  Worker that shares the API's Domain/Application is a project in the API's
+  solution, not a separate service.
+- `[GUARD]` Documentation never lives beside code or at the root: it goes under
+  `docs/`.
+
+### Reference solution layout (inside `backend/<name>-api/`)
 ```
 src/
   Domain/            <Project>.Domain
@@ -251,7 +279,8 @@ Queries skip the domain: endpoint → `Query` → handler → **Dapper** read se
 ## 7. Containerization & CI/CD
 
 - Multi-stage Dockerfile per runnable project; platform-agnostic image
-  (DigitalOcean App Platform / AWS ECS / Azure Container Apps).
+  (DigitalOcean App Platform / AWS ECS / Azure Container Apps). The build
+  context is the project's own folder (`backend/<name>-api`), never the repo root.
 - `docker-compose.yml` runs the app services plus the dependencies in use (from:
   Worker, Postgres, Redis, RabbitMQ, MinIO (S3), OTel Collector, Grafana stack)
   for local dev — the full local developer-experience rules live in **§10**.
@@ -372,8 +401,8 @@ manually testing endpoints require **zero setup beyond Docker**. Use the
   change as the code that first uses it (§0.1); the file never carries
   containers "for later".
 - `[GUARD]` **Selectable as the Visual Studio startup project.** A
-  `docker-compose.dcproj` sits next to `docker-compose.yml` and is part of the
-  solution; each containerized .NET project points at it
+  `docker-compose.dcproj` sits next to `docker-compose.yml` at the repo root and
+  is part of the solution; each containerized .NET project points at it
   (`DockerComposeProjectPath`) and its Dockerfile starts with the runtime `base`
   stage, so F5 on `docker-compose` brings the stack up with the debugger attached.
 - `[GUARD]` **The frontend is part of the stack, not an afterthought.** If a

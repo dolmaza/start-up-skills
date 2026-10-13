@@ -76,6 +76,8 @@ integration events (RabbitMQ), never shared tables.
 ## Naming & file organization
 `<Project>.Domain | .Application | .Infrastructure | .Api | .BuildingBlocks`
 (+ `.Worker` only once background work exists — never scaffolded up front).
+The solution lives in `backend/<name>-api/` (`src/` + `tests/` inside it); a
+separate service is its own solution in `backend/<name>-<service>/`.
 
 Inside each project, group **by feature/aggregate first, then by role** (full
 reference layout in `docs/backend/ARCHITECTURE.md` §1):

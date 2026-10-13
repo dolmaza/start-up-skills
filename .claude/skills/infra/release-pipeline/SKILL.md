@@ -18,7 +18,8 @@ full release flow (replace the basic pipeline — never leave two competing ones
 
 ## 1. Discovery
 
-Inventory before wiring: languages/stacks (`*.sln`, `package.json`), test
+Inventory before wiring: languages/stacks (`backend/*/*.sln`,
+`frontend/*/package.json` — one CI job per project folder), test
 projects and how they run, Dockerfiles + compose files, existing
 `.github/workflows/`, deployment target (`deploy/digitalocean/` scripts, App
 Platform spec, k8s manifests), health endpoints, migration strategy. Report
@@ -55,6 +56,7 @@ permissions: { contents: read }            # least privilege per workflow
 concurrency: { group: ci-${{ github.ref }}, cancel-in-progress: true }
 jobs:
   backend:                                  # parallel with frontend job
+    defaults: { run: { working-directory: backend/acme-api } }
     steps:
       - uses: actions/checkout@<pinned-sha>
       - uses: actions/setup-dotnet@<pinned-sha>
@@ -63,9 +65,10 @@ jobs:
       - run: dotnet format --verify-no-changes
       - run: dotnet test -c Release --no-build --logger trx
   frontend:
+    defaults: { run: { working-directory: frontend/acme-ui } }
     steps:
       - uses: actions/setup-node@<pinned-sha>
-        with: { node-version: 22, cache: npm }
+        with: { node-version: 22, cache: npm, cache-dependency-path: frontend/acme-ui/package-lock.json }
       - run: npm ci && npm run lint && npx tsc --noEmit && npm test -- --run && npm run build
   security:
     steps:
@@ -73,7 +76,10 @@ jobs:
       - run: dotnet list package --vulnerable --include-transitive
       - run: npm audit --audit-level=high
 ```
-Pin every third-party action to a commit SHA. Fail fast: validation and cheap
+One `backend`/`frontend` job per project folder: a separate service
+(`backend/<name>-<service>`) or UI (`frontend/<name>-<ui>-ui`) gets its own job
+(a matrix over the folders) and its own image. The `security` job's `dotnet`/`npm`
+steps run per project folder too. Pin every third-party action to a commit SHA. Fail fast: validation and cheap
 checks run before expensive ones; a red job stops the chain. Path filters
 (`paths:`) skip stacks a change can't affect; in monorepos build only affected
 projects where tooling allows.
@@ -85,7 +91,7 @@ permissions: { contents: read, packages: write }
 jobs:
   images:      # build once, deploy everywhere — the artifact is immutable
     steps:
-      - run: docker build -t $REG/api:${VERSION} -t $REG/api:${SHA} --label org.opencontainers.image.version=${VERSION} .
+      - run: docker build -t $REG/api:${VERSION} -t $REG/api:${SHA} --label org.opencontainers.image.version=${VERSION} -f backend/acme-api/src/Api/Dockerfile backend/acme-api
       - run: trivy image --exit-code 1 --severity HIGH,CRITICAL $REG/api:${VERSION}
       - uses: anchore/sbom-action@<pinned-sha>          # SBOM published with the release
       - run: docker push --all-tags $REG/api
@@ -126,7 +132,7 @@ implication honestly.
   required PR review, no force push.
 - **Secrets/variables**: `gh secret set --env production DO_SSH_KEY < key`,
   `gh variable set --env staging API_URL ...` — documented in
-  `deploy/cicd/SECRETS.md` (name, purpose, environment, who provisions it);
+  `docs/cicd/SECRETS.md` (name, purpose, environment, who provisions it);
   values never in the repo.
 
 ## 6. Rollback
@@ -150,7 +156,7 @@ new HIGH/CRITICAL vulnerabilities.
 
 ```text
 .github/workflows/{ci,release,deploy,rollback}.yml
-deploy/cicd/
+docs/cicd/
 ├── PIPELINE.md    # architecture: triggers, jobs, gates, versioning strategy, strategy choice
 ├── SECRETS.md     # every secret/variable: name, env, purpose, how to provision
 └── RUNBOOK.md     # operate it: cut a release, approve a deploy, read a failure, roll back, rotate secrets

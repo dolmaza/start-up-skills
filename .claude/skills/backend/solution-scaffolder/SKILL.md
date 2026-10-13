@@ -4,8 +4,10 @@ description: >-
   Deterministic bootstrap of a .NET 10 Clean Architecture solution: projects,
   references, package versions, DI skeleton, and the BuildingBlocks shared kernel.
   Use at the START of a new backend, or when adding a structural project. Prefers
-  the dotnet CLI and a fixed layout over hand-written boilerplate. Scaffolds only
-  what is needed now — Worker, packages and dependencies are added on demand.
+  the dotnet CLI and a fixed layout over hand-written boilerplate. Owns the repo
+  folder structure (backend/<name>-api, frontend/<name>-ui, docs/) and where an
+  extra microservice goes. Scaffolds only what is needed now — Worker, packages
+  and dependencies are added on demand.
 ---
 
 # Solution Scaffolder
@@ -14,7 +16,42 @@ description: >-
 commands; only fill in domain-specific content afterward.
 
 ## 1. Inputs
-- `PROJECT` — solution/root namespace (e.g. `Acme.Billing`).
+- `NAME` — the project name in kebab-case (e.g. `acme-billing`); names folders.
+- `PROJECT` — solution/root namespace (e.g. `Acme.Billing`); names .NET projects.
+
+## 1a. Repo folder structure (fixed)
+
+The repo root holds three folders — `backend`, `frontend`, `docs` — plus the
+root-level files that tie the system together (and, once infrastructure configs
+are adopted, the `deploy/` folder the infra skills write to):
+
+```text
+<repo>/
+├── backend/
+│   ├── <name>-api/              # THIS skill: the API solution (sln, src/, tests/)
+│   └── <name>-<service>/        # a separate service / microservice — only on request (§7)
+├── frontend/
+│   ├── <name>-ui/               # the main UI (`frontend-scaffolder`)
+│   └── <name>-<ui>-ui/          # a separate UI, named as requested (e.g. admin) — only on request
+├── docs/                        # ALL documentation and related files
+│   ├── backend/ARCHITECTURE.md
+│   └── frontend/ARCHITECTURE.md
+├── docker-compose.yml           # one per repo (`local-dev-environment`)
+├── docker-compose.dcproj
+└── README.md
+```
+
+- Every backend project lives in its **own folder under `backend/`**: the API is
+  always `<name>-api`; any other is `<name>-<service>`, where `<service>` is the
+  name the user asked for, kebab-cased. Never put a solution, `src/`
+  or `tests/` at the repo root or directly in `backend/`.
+- Each backend folder is **self-contained**: its own `.sln`, `src/`, `tests/`,
+  `Directory.Build.props`, `Directory.Packages.props`, `.dockerignore`. It is
+  also its own Docker build context.
+- Anything that is documentation — architecture, ADRs, specs, research,
+  runbooks — goes under `docs/`, never beside the code or at the root.
+- Create `backend/`, `frontend/` and `docs/` on first init; a `frontend/` with
+  nothing in it yet is omitted until a UI exists (on-demand rule, §1b).
 
 ## 1b. Scaffold only what is needed now (on-demand rule)
 
@@ -35,8 +72,12 @@ adopted on demand during development (§7), not a checklist to pre-install.
 
 ## 2. Create the solution (run `scripts/scaffold.sh PROJECT` if present, else)
 
+All commands in §2–§8 run **inside `backend/$NAME-api/`** — paths such as
+`src/Api` below are relative to that folder.
+
 ```bash
 P="$PROJECT"
+mkdir -p docs "backend/$NAME-api" && cd "backend/$NAME-api"
 dotnet new sln -n "$P"
 
 # src
@@ -63,7 +104,7 @@ dotnet sln "$P.sln" add $(find tests -name '*.csproj') --solution-folder tests
 Resulting solution view — flat, two folders only:
 
 ```
-$P.sln
+backend/$NAME-api/$P.sln
 ├── src/            <- solution folder
 │   ├── $P.Domain
 │   ├── $P.Application
@@ -83,7 +124,7 @@ $P.sln
 > `src` or `tests`. The single exception is `docker-compose` (the `.dcproj` added
 > by the `local-dev-environment` skill), which sits at the solution root.
 
-## 2b. Pin the language baseline once (`Directory.Build.props` at the repo root)
+## 2b. Pin the language baseline once (`Directory.Build.props` in `backend/$NAME-api/`)
 
 ```xml
 <Project>
@@ -177,6 +218,22 @@ dotnet add src/Worker reference src/Application src/Infrastructure
 Then give it a Dockerfile (`containerization-cicd`) and a `worker` compose
 service (`local-dev-environment`).
 
+**Separate service / microservice** — only when the user asks for one (a
+separately deployed backend with its own codebase; a Worker that shares this
+solution's Domain/Application is *not* one). It gets its own folder next to the
+API, never a project inside the API's solution:
+
+```bash
+SERVICE=notifications                          # the name the user asked for, kebab-case
+mkdir -p "backend/$NAME-$SERVICE" && cd "backend/$NAME-$SERVICE"
+# then §2–§6 again in this folder, with P="$PROJECT.Notifications"
+```
+It is a full, self-contained solution (own `.sln`, `src/`, `tests/`,
+`Directory.*.props`, Dockerfile, `.dockerignore`) that shares no project
+references with `$NAME-api` — services talk over HTTP/messaging. Add its service
+to the root `docker-compose.yml` (`local-dev-environment`) on the next free port.
+Scaffold only the layers it needs (on-demand rule, §1b).
+
 ## 8. Verify before handing off
 ```bash
 dotnet build
@@ -188,5 +245,8 @@ project landed at the root or in a nested folder, fix it with
 `dotnet sln remove <proj>` then re-add using `--solution-folder src|tests`.
 Confirm the on-demand rule (§1b): no unused project, package, registration,
 config section, or template placeholder file is left in the skeleton.
+Confirm the folder structure (§1a): the repo root has only `backend/`,
+`frontend/` (if a UI exists), `docs/` and root-level files; the solution sits in
+`backend/$NAME-api/`.
 Hand the green skeleton back to the architect, then proceed to model the first
 aggregate and build vertical slices.

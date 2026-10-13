@@ -30,6 +30,23 @@ Skills compose. A backend feature slice is typically `ddd-modeling` →
 `cqrs-result-pattern` → `hybrid-persistence` → `minimal-api-endpoints` →
 `dotnet-testing`, invoked one at a time as you work through the layers.
 
+## The project layout the skills produce
+
+Initializing a project with the scaffolder skills always yields this structure
+(`<name>` is the project name in kebab-case):
+
+```text
+<repo>/
+├── backend/
+│   ├── <name>-api/          # the API solution — solution-scaffolder
+│   └── <name>-<service>/    # a separate service / microservice, only when you ask for one
+├── frontend/
+│   ├── <name>-ui/           # the main UI — frontend-scaffolder
+│   └── <name>-<ui>-ui/      # a separate UI under the name you ask for (admin, portal, ...), only on request
+├── docs/                    # all documentation and related files
+└── docker-compose.yml       # one stack for the whole system
+```
+
 ## The constitutions (optional but recommended)
 
 `docs/backend/ARCHITECTURE.md` and `docs/frontend/ARCHITECTURE.md` are the full
