@@ -5,7 +5,8 @@ description: >-
   references, package versions, DI skeleton, and the BuildingBlocks shared kernel.
   Use at the START of a new backend, or when adding a structural project. Prefers
   the dotnet CLI and a fixed layout over hand-written boilerplate. Owns the repo
-  folder structure (backend/<name>-api, frontend/<name>-ui, docs/) and where an
+  folder structure (backend/<name>-api, frontend/<name>-ui, mobile/<name>-app,
+  docs/) and where an
   extra microservice goes. Scaffolds only what is needed now — Worker, packages
   and dependencies are added on demand.
 ---
@@ -21,8 +22,8 @@ commands; only fill in domain-specific content afterward.
 
 ## 1a. Repo folder structure (fixed)
 
-The repo root holds three folders — `backend`, `frontend`, `docs` — plus the
-root-level files that tie the system together (and, once infrastructure configs
+The repo root holds the folders `backend`, `frontend`, `mobile` and `docs` —
+each created only once it has something in it — plus the root-level files that tie the system together (and, once infrastructure configs
 are adopted, the `deploy/` folder the infra skills write to):
 
 ```text
@@ -33,9 +34,12 @@ are adopted, the `deploy/` folder the infra skills write to):
 ├── frontend/
 │   ├── <name>-ui/               # the main UI (`frontend-scaffolder`)
 │   └── <name>-<ui>-ui/          # a separate UI, named as requested (e.g. admin) — only on request
+├── mobile/
+│   └── <name>-app/              # the React Native + Expo app (`mobile-scaffolder`) — only on request
 ├── docs/                        # ALL documentation and related files
 │   ├── backend/ARCHITECTURE.md
-│   └── frontend/ARCHITECTURE.md
+│   ├── frontend/ARCHITECTURE.md
+│   └── mobile/ARCHITECTURE.md
 ├── docker-compose.yml           # one per repo (`local-dev-environment`)
 ├── docker-compose.dcproj
 └── README.md
@@ -50,8 +54,8 @@ are adopted, the `deploy/` folder the infra skills write to):
   also its own Docker build context.
 - Anything that is documentation — architecture, ADRs, specs, research,
   runbooks — goes under `docs/`, never beside the code or at the root.
-- Create `backend/`, `frontend/` and `docs/` on first init; a `frontend/` with
-  nothing in it yet is omitted until a UI exists (on-demand rule, §1b).
+- Create `backend/` and `docs/` on first init; `frontend/` and `mobile/` are
+  omitted until a UI / a mobile app exists (on-demand rule, §1b).
 
 ## 1b. Scaffold only what is needed now (on-demand rule)
 
@@ -246,7 +250,8 @@ project landed at the root or in a nested folder, fix it with
 Confirm the on-demand rule (§1b): no unused project, package, registration,
 config section, or template placeholder file is left in the skeleton.
 Confirm the folder structure (§1a): the repo root has only `backend/`,
-`frontend/` (if a UI exists), `docs/` and root-level files; the solution sits in
+`frontend/` (if a UI exists), `mobile/` (if a mobile app exists), `docs/` and
+root-level files; the solution sits in
 `backend/$NAME-api/`.
 Hand the green skeleton back to the architect, then proceed to model the first
 aggregate and build vertical slices.

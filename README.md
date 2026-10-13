@@ -1,6 +1,6 @@
 # start-up-skills
 
-**24 skills you invoke yourself, when you decide you want them.** No agents, no
+**32 skills you invoke yourself, when you decide you want them.** No agents, no
 slash commands, no orchestration, no requirements pipeline. You drive the work;
 a skill supplies the patterns, templates, and checklists for the thing you are
 doing right now, and then gets out of the way.
@@ -43,14 +43,16 @@ Initializing a project with the scaffolder skills always yields this structure
 ├── frontend/
 │   ├── <name>-ui/           # the main UI — frontend-scaffolder
 │   └── <name>-<ui>-ui/      # a separate UI under the name you ask for (admin, portal, ...), only on request
+├── mobile/
+│   └── <name>-app/          # the React Native + Expo app, only when you ask for one — mobile-scaffolder
 ├── docs/                    # all documentation and related files
 └── docker-compose.yml       # one stack for the whole system
 ```
 
 ## The constitutions (optional but recommended)
 
-`docs/backend/ARCHITECTURE.md` and `docs/frontend/ARCHITECTURE.md` are the full
-architecture rules. Each skill is a self-contained cheat sheet and works without
+`docs/backend/ARCHITECTURE.md`, `docs/frontend/ARCHITECTURE.md` and
+`docs/mobile/ARCHITECTURE.md` are the full architecture rules. Each skill is a self-contained cheat sheet and works without
 them, but several point at a section for the authoritative detail.
 
 Copy them into a project once to make those pointers resolve:
@@ -96,6 +98,22 @@ Then edit them — they are yours, and the skills read whatever they say.
 | `react-component-patterns` | Logic in hooks, presentational components, composition, a11y |
 | `frontend-testing` | Vitest + RTL + MSW + Playwright |
 | `frontend-scaffolder` | Bootstrap Vite + TS + Tailwind + boundary lint rules |
+
+### Mobile — React Native + Expo (iOS and Android)
+
+These cover what a phone adds. The shared React patterns — `feature-architecture`,
+`data-state-management`, `react-component-patterns` — apply to mobile as written.
+
+| Skill | For |
+|---|---|
+| `mobile-scaffolder` | Bootstrap the Expo app: dev builds, app variants, NativeWind, boundary lint rules, generated API client |
+| `mobile-navigation` | Expo Router with thin routes, the auth guard, validated params, deep links |
+| `mobile-auth` | Secure token storage, single-flight refresh, system-browser OAuth, Sign in with Apple |
+| `mobile-data-offline` | Connectivity-aware TanStack Query, persisted cache, storage roles, offline states |
+| `mobile-ui-patterns` | Primitives, safe areas, keyboard-safe forms, lists, platform differences, accessibility |
+| `mobile-device-capabilities` | In-context permissions, push notifications, Universal/App Links, native modules |
+| `mobile-testing` | Jest + React Native Testing Library + MSW + Maestro on both platforms |
+| `mobile-release` | EAS build / submit / update, versioning, Sentry gate, store-readiness checklist |
 
 ### Infrastructure
 

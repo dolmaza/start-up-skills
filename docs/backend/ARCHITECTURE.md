@@ -36,10 +36,11 @@ fitness rules.
 | API docs & testing   | OpenAPI + Swagger UI, JWT-enabled, dev-only (§10)            |
 | CI/CD                | GitHub Actions                                               |
 | LLM access           | Provider-agnostic abstraction (Gemini/Claude/OpenAI)         |
-| AuthN                | JWT (access + rotating refresh) · OAuth Google + Facebook    |
+| AuthN                | JWT (access + rotating refresh) · OAuth Google + Facebook (+ Apple when a mobile app exists, §9.8) |
 | Identity store       | ASP.NET Core Identity (Infrastructure, behind interfaces)    |
 | AuthZ                | Roles + scopes/permissions + resource-based policies         |
 | Idempotency          | `Idempotency-Key` on writes, backed by Redis                 |
+| Push notifications   | `IPushSender` (Expo push service), sent from the Worker — on demand (§9.8) |
 | Tests                | xUnit + FluentAssertions + Moq + WireMock                    |
 
 ### 0.1 Add on demand — nothing is scaffolded "for later"
@@ -104,11 +105,14 @@ Presentation  ─────►  Application  ─────►  Domain
   frontend/
     <name>-ui/           the main UI
     <name>-<ui>-ui/      a separate UI, named as requested (e.g. admin) — only when requested
+  mobile/
+    <name>-app/          the React Native + Expo app — only when requested
   docs/                  ALL documentation and related files (these constitutions,
                          ADRs, specs, research, runbooks)
   docker-compose.yml     one per repo (§10)
 ```
-- `[GUARD]` The repo root holds the folders `backend`, `frontend`, `docs` — no
+- `[GUARD]` The repo root holds the folders `backend`, `frontend`, `mobile`,
+  `docs` (each present only once it has content) — no
   solution, `src/`, `tests/` or app code at the root. `<name>` is the project
   name in kebab-case.
 - `[GUARD]` Each backend project is its own folder `backend/<name>-<service>`
@@ -234,6 +238,8 @@ Queries skip the domain: endpoint → `Query` → handler → **Dapper** read se
 - S3-compatible storage behind `IFileStorage`.
 - RabbitMQ behind `IEventBus` / `IMessagePublisher` for pub/sub & integration
   events. Heavy/long-running consumers live in the **Worker** project, not the API.
+- Push notifications behind `IPushSender` (Expo push service by default), sent
+  from the Worker; receipts are checked and dead device tokens pruned (§9.8).
 
 ---
 
@@ -379,6 +385,36 @@ Register · Login · Refresh · Logout (revoke) · Forgot-password · Reset-pass
   store, OAuth provider verification, Redis idempotency store.
 - Presentation: thin auth endpoints + the authN/authZ middleware pipeline and CORS,
   all wired in extension methods (`Program.cs` stays structural).
+
+### 9.8 Mobile clients (when the repo has a mobile app)
+Counterpart of `docs/mobile/ARCHITECTURE.md` §4, §5.5, §7. None of this exists
+until a mobile app does (§0.1).
+
+- **Native sign-in.** Mobile apps authenticate through the system browser with
+  authorization code + PKCE and post `{ code, codeVerifier, redirectUri }` to an
+  anonymous, rate-limited exchange endpoint. `[GUARD]` The API exchanges and
+  verifies server-side, checks `redirectUri` against a configured allow-list,
+  and issues its own JWT pair — no provider secret ever ships in an app.
+- `[GUARD]` **Sign in with Apple is a supported provider whenever a mobile app
+  offers any social login** (App Store Review Guideline 4.8). The identity token
+  is validated against Apple's keys; the user is keyed on Apple's `sub`; name
+  and email are persisted on first sign-in (they are not sent again).
+- **Account deletion** is an exposed use case when accounts can be created
+  from the app (both stores require it) and revokes external provider tokens.
+- `[GUARD]` **Backward compatibility.** Installed app versions cannot be
+  redeployed: API changes are additive for every supported version. Requests
+  carry `X-App-Version` / `X-App-Platform`; a client below the configured
+  minimum receives `426 Upgrade Required`, which is the only sanctioned way to
+  retire an old contract.
+- **Device tokens & push (on demand).** One push token per user + device,
+  registered after login, removed on logout. Sends go through `IPushSender`
+  from the Worker; payloads carry identifiers and a relative in-app link, never
+  sensitive content.
+- **Universal Links / App Links (on demand).** The web host serves
+  `/.well-known/apple-app-site-association` and `/.well-known/assetlinks.json`
+  as static JSON, anonymously, without redirects.
+- CORS is irrelevant to native clients (no `Origin`); nothing is added to the
+  CORS policy for mobile.
 
 ---
 

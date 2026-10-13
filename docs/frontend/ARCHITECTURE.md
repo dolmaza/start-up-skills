@@ -47,6 +47,7 @@ modularity, and strict dependency boundaries.
 ├── frontend/
 │   ├── <name>-ui/             # the main UI — the app described below
 │   └── <name>-<ui>-ui/        # a separate UI — only when requested
+├── mobile/<name>-app/         # a mobile app, if one exists — docs/mobile/ARCHITECTURE.md
 └── docs/                      # all documentation and related files
 ```
 - `[GUARD]` Every UI is its own folder under `frontend/`: the main one is
@@ -137,6 +138,10 @@ Zustand/`useState`; it stays in the query cache.
   errors); use `unknown` + narrowing. `tsc --noEmit` must pass clean.
 - Types stay **local to their feature** unless they cross a public domain boundary
   (then they're exported from the feature's `index.ts`).
+- `[GUARD]` **The backend contract is generated.** Types and Zod schemas for the
+  backend API are generated from its OpenAPI document into
+  `shared/api/generated/` and never hand-edited or re-declared; CI fails when
+  the output is stale. Hand-written schemas are for everything else.
 - **Validate at the boundary.** Parse all external data (API responses, URL params,
   forms, env) with **Zod**; infer TS types from schemas (`z.infer`) so runtime and
   compile-time agree. Never trust unparsed network JSON as a typed value.

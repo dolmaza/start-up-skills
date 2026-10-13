@@ -25,6 +25,7 @@ one the backend uses for `backend/<name>-api`.
 ├── frontend/
 │   ├── <name>-ui/               # the main UI — this skill's default target
 │   └── <name>-<ui>-ui/          # a separate UI — only when the user asks for one
+├── mobile/<name>-app/           # a mobile app, if one exists (`mobile-scaffolder`)
 ├── docs/                        # all documentation and related files
 └── docker-compose.yml
 ```
@@ -70,8 +71,30 @@ mkdir -p src/app src/components src/shared/api src/shared/hooks src/shared/lib s
 src/app/         providers.tsx, router.tsx, App.tsx
 src/components/   shared UI primitives
 src/shared/api/   httpClient.ts (typed fetch + auth/refresh + Zod error shape)
+                  generated/ — types + Zod schemas generated from the backend's OpenAPI (§3b)
 src/features/     one folder per domain (see feature-architecture skill)
 ```
+
+## 3b. Generate the API contract from the backend's OpenAPI document
+
+The backend publishes `/openapi/v1.json`; types and Zod schemas for it are
+**generated, not hand-written**, so client and server cannot drift:
+
+```bash
+npm i -D orval
+```
+```ts
+// orval.config.ts
+export default { api: {
+  input: "http://localhost:8080/openapi/v1.json",
+  output: { target: "src/shared/api/generated/api.ts", client: "fetch", mode: "tags-split",
+            override: { mutator: { path: "src/shared/api/httpClient.ts", name: "http" } } } } };
+```
+Add `"api:generate": "orval"` to the scripts. Generated files are committed and
+never hand-edited; features wrap them in query hooks (`data-state-management`).
+CI regenerates and fails on a diff. Hand-written Zod stays for everything that
+is not the backend API (URL params, env, third-party APIs). A mobile app, when
+one exists, generates from the same document — nothing is shared between apps.
 
 ## 4. ESLint encodes the architecture (the programmatic guard)
 ```jsonc

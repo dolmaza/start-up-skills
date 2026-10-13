@@ -71,6 +71,7 @@ examples below use `acme`):
 ├── backend/<name>-<service>/    # build context of a separate service, if one exists
 ├── frontend/<name>-ui/          # build context of `frontend`
 ├── frontend/<name>-<ui>-ui/     # build context of a separate UI, if one exists
+├── mobile/<name>-app/           # NOT a compose service — runs via `expo start` against `api`
 ├── docs/
 ├── deploy/                      # observability configs, only once adopted
 ├── docker-compose.yml           # the ONE compose file
@@ -80,6 +81,12 @@ examples below use `acme`):
 Each project folder is its own **build context** — never the repo root — so a
 Dockerfile's `COPY` paths stay relative to its own project and one service's
 image never ships another's source.
+
+A mobile app (`mobile/<name>-app`) is never added to compose. It consumes this
+stack: `api` on `http://localhost:8080` from the iOS simulator,
+`http://10.0.2.2:8080` from the Android emulator, the machine's LAN IP from a
+physical device. Native apps send no `Origin`, so it needs no CORS entry
+(`mobile-scaffolder` §8).
 
 ## docker-compose.yml — starting point
 

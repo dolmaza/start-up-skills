@@ -110,6 +110,10 @@ app.Run();
 - [ ] Errors mapped by `ErrorType`; success uses correct 200/201/204.
 - [ ] Endpoints grouped by feature; registered via a single `MapEndpoints()`.
 - [ ] `Program.cs` has no inline service config or route logic.
+- [ ] API changes stay backward-compatible with every supported mobile app
+      version (additive fields, no renamed/removed properties, no newly required
+      inputs); a breaking change waits for the `426` minimum-version gate
+      (`api-security` skill) — installed apps cannot be redeployed.
 - [ ] OpenAPI metadata on every endpoint; Swagger UI + JWT bearer wiring per the
       `local-dev-environment` skill (`docs/backend/ARCHITECTURE.md` §10.3).
 - [ ] Modern C# baseline applied — see `clean-architecture` skill.

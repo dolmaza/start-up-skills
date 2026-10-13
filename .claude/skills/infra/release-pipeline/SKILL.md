@@ -19,7 +19,8 @@ full release flow (replace the basic pipeline — never leave two competing ones
 ## 1. Discovery
 
 Inventory before wiring: languages/stacks (`backend/*/*.sln`,
-`frontend/*/package.json` — one CI job per project folder), test
+`frontend/*/package.json`, `mobile/*/app.config.ts` — one CI job per project
+folder), test
 projects and how they run, Dockerfiles + compose files, existing
 `.github/workflows/`, deployment target (`deploy/digitalocean/` scripts, App
 Platform spec, k8s manifests), health endpoints, migration strategy. Report
@@ -79,7 +80,10 @@ jobs:
 One `backend`/`frontend` job per project folder: a separate service
 (`backend/<name>-<service>`) or UI (`frontend/<name>-<ui>-ui`) gets its own job
 (a matrix over the folders) and its own image. The `security` job's `dotnet`/`npm`
-steps run per project folder too. Pin every third-party action to a commit SHA. Fail fast: validation and cheap
+steps run per project folder too. A mobile app (`mobile/<name>-app`) adds a `mobile` CI job and tag-triggered EAS
+build/submit steps to these same workflows — templates in the `mobile-release`
+skill; its artifacts are store builds and OTA updates, not images.
+Pin every third-party action to a commit SHA. Fail fast: validation and cheap
 checks run before expensive ones; a red job stops the chain. Path filters
 (`paths:`) skip stacks a change can't affect; in monorepos build only affected
 projects where tooling allows.

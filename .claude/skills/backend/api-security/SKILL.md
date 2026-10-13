@@ -3,7 +3,8 @@ name: api-security
 description: >-
   Templates and rules for securing the backend: JWT access + rotating refresh
   tokens, secure-by-default authorization (roles, scopes/permissions,
-  resource-based policies), Google/Facebook OAuth, register/login/refresh/
+  resource-based policies), Google/Facebook OAuth (plus Sign in with Apple and
+  the minimum-app-version gate when a mobile app exists), register/login/refresh/
   password-recovery flows, write-endpoint idempotency, CORS, and OWASP hardening.
   Use whenever adding authentication, authorization, or security controls.
 ---
@@ -124,6 +125,47 @@ the API's **own** JWT pair (never reuse the provider token as the access token).
 > GUARD: auth failures return a **generic** message ("invalid credentials") — never
 > reveal whether the email exists (no user enumeration).
 
+## Mobile clients (only when the repo has a mobile app)
+
+**Code exchange for native apps.** A mobile app signs in through the system
+browser with PKCE and posts the result to the API — there is no cookie-based
+redirect flow to lean on:
+
+- `POST /auth/external/{provider}` with `{ code, codeVerifier, redirectUri }`
+  (anonymous, rate-limited). `ExternalLoginCommand` exchanges the code at the
+  provider's token endpoint **with the verifier**, validates the `id_token`
+  (signature via the provider's JWKS, `iss`, `aud`, `exp`, `nonce`), then issues
+  the API's own JWT pair.
+- `redirectUri` must match an allow-list from configuration (one per app
+  variant: `acme://`, `acme-preview://`, …) — never trust it blindly.
+- Each platform has its own OAuth client ID at the provider; accept the set of
+  configured audiences, not a single one.
+
+**Sign in with Apple — required.** App Store Review Guideline 4.8: an iOS app
+offering third-party login must offer an equivalent privacy-focused option.
+
+- `POST /auth/external/apple` with `{ identityToken, fullName? }`. Validate the
+  token against Apple's JWKS (`https://appleid.apple.com/auth/keys`):
+  `iss = https://appleid.apple.com`, `aud =` the app's bundle identifier (one per
+  variant), `exp`, signature.
+- Key the user on Apple's stable `sub`. **Name and email arrive only on the
+  first sign-in** — persist them then. The email may be a private relay
+  address; never require a "real" one or use email as the join key.
+- Apple requires that **account deletion** also revokes the Apple token
+  (`/auth/revoke`) — implement it with the delete-account use case.
+
+**Minimum supported app version.** Mobile requests carry `X-App-Version` and
+`X-App-Platform`. A small middleware compares against
+`MobileClients:MinimumVersion:{ios|android}` from configuration and
+short-circuits with **`426 Upgrade Required`** (problem details, no body data)
+when the client is older; requests without the headers (web, tools) pass.
+Raising the minimum is a config change, not a deploy — and the reason an old
+version is cut off is recorded.
+
+**Device tokens for push (on demand).** `POST /devices` / `DELETE /devices/{id}`
+store one push token per user + device; logout deletes it. Sending goes through
+`IPushSender` from the Worker (constitution §4) — see `mobile-device-capabilities`.
+
 ## Idempotency for writes (Redis)
 ```csharp
 // Endpoint filter on POST/PUT/PATCH/DELETE: read "Idempotency-Key" header.
@@ -151,6 +193,9 @@ builder.Services.AddCors(o => o.AddPolicy("Default", p => p
 - [ ] Roles + scope policies + resource-based handlers available and applied.
 - [ ] Register/login/refresh/logout/forgot/reset + Google & Facebook OAuth exposed.
 - [ ] OAuth provider token verified server-side; API issues its own JWT.
+- [ ] Mobile app exists → code+PKCE exchange endpoint with a redirect-URI
+      allow-list, Sign in with Apple, `426` minimum-version gate, account
+      deletion revoking provider tokens.
 - [ ] Write endpoints idempotent via `Idempotency-Key` + Redis.
 - [ ] CORS named policy with explicit origins; HTTPS + HSTS + security headers.
 - [ ] Rate limiting on auth endpoints; generic auth errors (no enumeration).

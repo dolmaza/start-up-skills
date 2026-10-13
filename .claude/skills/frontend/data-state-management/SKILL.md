@@ -33,6 +33,14 @@ export async function http<T>(input: string, schema: z.ZodType<T>, init?: Reques
 }
 ```
 
+## The API contract is generated
+Types and Zod schemas for the **backend API** come from its OpenAPI document
+(`npm run api:generate` → `shared/api/generated/`, see `frontend-scaffolder`
+§3b) and are never hand-edited or re-declared. Feature `api/` folders import the
+generated request functions and schemas and wrap them in hooks. The
+hand-written schemas in the examples below are the shape to follow for data
+that is *not* the backend API (third-party APIs, URL params, env, forms).
+
 ## Server state — TanStack Query (in a feature's `api/`)
 ```ts
 export const orderKeys = {
@@ -92,4 +100,5 @@ navigate({ search: (prev) => ({ ...prev, page: prev.page + 1 }) });
 - [ ] Each datum is in the narrowest correct layer.
 - [ ] Query keys centralized; invalidations precise.
 - [ ] Responses Zod-validated; errors normalized.
+- [ ] Backend types/schemas generated from OpenAPI, not hand-copied.
 - [ ] No server data duplicated into client state.
