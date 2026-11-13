@@ -1,0 +1,120 @@
+# The cost model of <product>: the single source of truth for what the platform costs and the least
+# a paying customer's monthly subscription must be. The calculator reads it; the method is
+# docs/pricing/METHODOLOGY.md. Change a number here, never in code.
+#
+# Money is in the cost currency unless a key says otherwise. Every figure carries its source and
+# date beside it; "assumption" marks a number no one has measured yet, to replace after launch.
+
+as_of: YYYY-MM-DD
+
+currency:
+  cost: USD                 # what the providers bill in
+  price: USD                # what customers pay in
+
+# ── Pricing rule (D-03) ─────────────────────────────────────────────────────────────────────────
+pricing:
+  price_one_tier_ahead: true  # the floor uses the tier after the one the load needs
+  minimum_multiple: 2         # minimum = floor × 2
+  target_multiple: 3          # target = floor × 3
+  contingency: 0.15           # of revenue, for what no one has priced yet
+  round_step: 10              # prices rounded up to steps of 10 …
+  round_ending: -1            # … ending in 9 (49, 59, 109). 0 for plain multiples of the step
+
+# ── Currency (D-07) ─────────────────────────────────────────────────────────────────────────────
+fx:
+  rate: 1.0                   # price-currency units per cost-currency unit (central bank, date)
+  buffer: 0.0                 # e.g. 0.10 against a weaker local currency; 0 when both are the same
+
+# ── Tax and fees (D-06; confirm with an accountant) ─────────────────────────────────────────────
+tax:
+  turnover_tax: 0.0           # share of turnover, e.g. a small-business regime
+  small_business_limit: null  # yearly turnover where that regime ends, price currency; null if none
+  vat_rate: 0.0
+  vat_threshold: null         # yearly turnover where VAT registration is mandatory; null if none
+  vat_registered: false
+payment_fee: 0.03             # assumption: card and payout fees, share of each payment
+payment_fee_fixed: 0.30       # a fixed fee per payment, price currency (Stripe: 0.30 USD, 0.25 EUR); 0 if none
+charges_per_month: 1          # 1 for monthly billing, 0.0833 (1/12) for yearly
+
+# ── Users (D-11) ────────────────────────────────────────────────────────────────────────────────
+users:
+  dau_per_mau: 0.20           # assumption
+  peak_share_of_dau: 0.15     # assumption: online at the busiest moment
+  upgrade_at: 0.50            # upgrade at half the measured capacity
+
+# ── Infrastructure ladder (docs/pricing/capacity.md, measured YYYY-MM-DD) ─────────────────────
+# capacity: people at once that passed (p95 < 500 ms, errors < 1 %). monthly: the whole layout,
+# including storage and registry plans. managed_db: the database is a managed service.
+tiers:
+  - id: T0
+    name: today's box
+    monthly: 0
+    capacity: 0
+    managed_db: false
+    measured: true
+  - id: T1
+    name: the next size
+    monthly: 0
+    capacity: 0
+    managed_db: false
+    measured: true
+  - id: T2
+    name: next size + managed database
+    monthly: 0
+    capacity: 0
+    managed_db: true
+    measured: false             # an estimate until load-tested
+
+# D-09: protection from the first paying customer; managed database from this many (null: never forced).
+data_safety:
+  hardening_monthly: 0          # backups + a volume for the database
+  managed_db_from_customers: 5
+
+# ── Usage-priced resources (docs/pricing/session-profiles.md) ──────────────────────────────────
+# quantity a month = MAU × per_mau + customers × per_customer, in `unit`. Past `included`:
+# `per_unit` for each unit over, or `flat` (a paid plan) once any of it is exceeded.
+usage:
+  - name: egress
+    unit: GB
+    per_mau: 0.0                # sessions a month × MB a session ÷ 1000
+    per_customer: 0
+    included: 1000
+    over: { per_unit: 0.01 }
+  - name: storage
+    unit: GB
+    per_mau: 0
+    per_customer: 0.0           # a customer's data a year in
+    included: 250
+    over: { per_unit: 0.02 }
+  - name: email
+    unit: emails
+    per_mau: 0.5                # assumption
+    per_customer: 0
+    included: 9000              # the free plan's month
+    over: { flat: 9 }           # the cheapest paid plan
+
+# ── AI (measured from the usage ledger; list prices) ───────────────────────────────────────────
+# One call's cost × calls a month. Spread one-off onboarding over its months (e.g. 300 ÷ 12).
+ai:
+  per_customer:
+    - name: example call
+      unit_cost: 0.0
+      units_per_month: 0        # assumption
+  per_mau:
+    - name: example call
+      unit_cost: 0.0
+      units_per_month: 0        # assumption: typical use, not the daily limit (D-05)
+
+# ── Fixed costs, monthly (D-01, D-08) ───────────────────────────────────────────────────────────
+# currency: price for a cost paid in the customers' currency (a local domain, an accountant).
+fixed:
+  - { name: coding assistant, monthly: 20 }
+  - { name: domain, monthly: 0, currency: price }      # yearly ÷ 12
+  - { name: marketing, monthly: 0, currency: price }   # 0 until real
+  - { name: accounting, monthly: 0, currency: price }
+  - { name: founder pay, monthly: 0, currency: price }
+
+# ── The scenarios the calculator prints ────────────────────────────────────────────────────────
+scenarios:
+  customers: [1, 3, 5, 10, 20, 50, 100]
+  mau_per_customer: [50, 100, 300]

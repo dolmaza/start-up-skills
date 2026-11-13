@@ -1,6 +1,6 @@
 # start-up-skills
 
-**32 skills you invoke yourself, when you decide you want them.** No agents, no
+**33 skills you invoke yourself, when you decide you want them.** No agents, no
 slash commands, no orchestration, no requirements pipeline. You drive the work;
 a skill supplies the patterns, templates, and checklists for the thing you are
 doing right now, and then gets out of the way.
@@ -28,7 +28,9 @@ is slow", "wire TanStack Query for the orders list").
 
 Skills compose. A backend feature slice is typically `ddd-modeling` →
 `cqrs-result-pattern` → `hybrid-persistence` → `minimal-api-endpoints` →
-`dotnet-testing`, invoked one at a time as you work through the layers.
+`dotnet-testing`, invoked one at a time as you work through the layers. Before launch, pair
+`digitalocean-infrastructure` (what each tier costs) with `saas-unit-economics`
+(what each customer must pay to cover it).
 
 ## The project layout the skills produce
 
@@ -121,6 +123,12 @@ These cover what a phone adds. The shared React patterns — `feature-architectu
 |---|---|
 | `digitalocean-infrastructure` | Compose → DO mapping, sizing, cost estimation, `doctl` provisioning |
 | `release-pipeline` | Version-driven GitHub Actions: ci / release / deploy / rollback |
+
+### Business
+
+| Skill | For |
+|---|---|
+| `saas-unit-economics` | Cost per customer (hosting, AI tokens, fees, tax, FX) and the least subscription price that never runs at a loss, including after the next infra upgrade; YAML cost model + tested calculator (Node ≥ 22.6) |
 
 ### Research and process
 
