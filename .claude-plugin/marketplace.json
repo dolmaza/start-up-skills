@@ -1,12 +1,12 @@
 {
   "name": "start-up-skills",
   "owner": { "name": "dolmaza" },
-  "description": "Marketplace for the start-up-skills plugin: on-demand engineering skills for .NET Clean Architecture backends, feature-based React frontends and React Native + Expo mobile apps.",
+  "description": "Marketplace for the start-up-skills plugin: on-demand engineering skills for .NET Clean Architecture backends, feature-based React frontends, React Native + Expo mobile apps, and SaaS unit economics (pricing per customer).",
   "plugins": [
     {
       "name": "start-up-skills",
       "source": "./",
-      "description": "On-demand technique skills — .NET 10 Clean Architecture + DDD backends feature-based React/TypeScript frontends, and React Native + Expo mobile apps. No agents, no commands, no workflow."
+      "description": "On-demand technique skills — .NET 10 Clean Architecture + DDD backends, feature-based React/TypeScript frontends, React Native + Expo mobile apps, and SaaS unit economics / least-price-per-customer modeling. No agents, no commands, no workflow."
     }
   ]
 }

@@ -1,7 +1,7 @@
 {
   "name": "start-up-skills",
-  "version": "1.0.0",
-  "description": "The engineering know-how of the start-up factory, with the factory removed. 32 skills you invoke yourself, one at a time, when you decide you want them: .NET 10 Clean Architecture + DDD + CQRS backends (domain modeling, persistence, Minimal APIs, auth, testing, observability, performance, local dev, containers), feature-based React + TypeScript frontends (feature slices, state layers, component patterns, testing, scaffolding), React Native + Expo mobile apps for iOS and Android (scaffolding, navigation, auth, offline data, UI patterns, device capabilities, testing, EAS release), infrastructure (DigitalOcean, release pipelines), provider research, and process (grilling a plan into a spec, branch-and-PR discipline). No agents, no slash commands, no orchestration, no requirements pipeline — you drive, the skills only supply the patterns and templates. Ships the three architecture constitutions under docs/ so a project can carry the full rules the skills point at.",
+  "version": "1.1.0",
+  "description": "The engineering know-how of the start-up factory, with the factory removed. 33 skills you invoke yourself, one at a time, when you decide you want them: .NET 10 Clean Architecture + DDD + CQRS backends (domain modeling, persistence, Minimal APIs, auth, testing, observability, performance, local dev, containers), feature-based React + TypeScript frontends (feature slices, state layers, component patterns, testing, scaffolding), React Native + Expo mobile apps for iOS and Android (scaffolding, navigation, auth, offline data, UI patterns, device capabilities, testing, EAS release), infrastructure (DigitalOcean, release pipelines), business (SaaS unit economics: cost per customer, AI/LLM token cost, tier capacity, the least subscription price that never runs at a loss), provider research, and process (grilling a plan into a spec, branch-and-PR discipline). No agents, no slash commands, no orchestration, no requirements pipeline — you drive, the skills only supply the patterns and templates. Ships the three architecture constitutions under docs/ so a project can carry the full rules the skills point at.",
   "author": { "name": "dolmaza" },
   "homepage": "https://github.com/dolmaza/start-up",
   "keywords": [
@@ -10,6 +10,7 @@
     "react-native", "expo", "mobile", "ios", "android",
     "testing", "observability", "grafana", "performance",
     "digitalocean", "ci-cd", "docker",
+    "saas", "pricing", "unit-economics", "cost-model",
     "skills", "on-demand", "no-agents"
   ],
   "skills": [
@@ -18,6 +19,7 @@
     "./.claude/skills/mobile",
     "./.claude/skills/infra",
     "./.claude/skills/research",
-    "./.claude/skills/workflow"
+    "./.claude/skills/workflow",
+    "./.claude/skills/business"
   ]
 }

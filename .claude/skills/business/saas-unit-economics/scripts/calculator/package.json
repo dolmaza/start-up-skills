@@ -1,0 +1,21 @@
+{
+  "name": "saas-cost-model",
+  "private": true,
+  "description": "The least monthly price per paying customer, from a cost-model.yaml (saas-unit-economics skill).",
+  "type": "module",
+  "engines": {
+    "node": ">=22.6"
+  },
+  "scripts": {
+    "calc": "node --experimental-strip-types --no-warnings=ExperimentalWarning src/cli.ts",
+    "test": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test src/model.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "yaml": "2.6.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "typescript": "6.0.3"
+  }
+}

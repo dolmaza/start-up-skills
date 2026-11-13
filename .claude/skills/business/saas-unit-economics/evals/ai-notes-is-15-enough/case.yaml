@@ -1,0 +1,7 @@
+schema_version: "1.1"
+name: ai-notes-is-15-enough
+expected_outcome: |
+  AI cost per workspace computed (about $7 a month at 6 seats), all costs including Stripe's fixed fee
+  per charge, a floor per workspace with a contingency, and the conclusion that $15 covers the floor
+  but not a safe minimum (about twice the floor), with AI scaling per seat flagged and per-seat pricing
+  or an AI usage cap recommended.

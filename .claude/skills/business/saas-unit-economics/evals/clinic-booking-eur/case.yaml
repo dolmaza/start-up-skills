@@ -1,0 +1,7 @@
+schema_version: "1.1"
+name: clinic-booking-eur
+expected_outcome: |
+  A cost-model.yaml with every number sourced or marked as an assumption, a floor per clinic computed
+  from the next server tier with payment fees and a contingency deducted, a minimum of about twice the
+  floor in EUR, a table across clinic counts, the unmeasured capacity called out with a load test
+  recommended, and the VAT exemption threshold checked against yearly turnover.
